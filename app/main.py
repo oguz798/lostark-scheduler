@@ -11,6 +11,7 @@ from app.db import (
     get_connection,
     save_imported_roster,
     delete_member,
+    create_raid_definition,
     current_timestamp,
 )
 from dataclasses import asdict
@@ -47,6 +48,49 @@ def _select_refresh_roster(results: list, roster_name: str):
 @app.on_event("startup")
 def startup():
     init_db()
+
+
+@app.get("/raids")
+async def raids(request: Request, message: str | None = None):
+    with get_connection() as connection:
+        raid_rows = connection.execute(
+            "SELECT * FROM raid_definitions ORDER BY min_item_level DESC"
+        ).fetchall()
+
+    raids = [dict(row) for row in raid_rows]
+    return templates.TemplateResponse(
+        name="raids.html",
+        request=request,
+        context={"request": request, "raids": raids, "message": message},
+    )
+
+
+@app.post("/raids/create")
+async def create_raid(
+    title: str = Form(...),
+    difficulty: str = Form(...),
+    player_count: int = Form(...),
+    min_item_level: float = Form(...),
+    notes: str = Form(""),
+):
+    title = title.strip()
+    difficulty = difficulty.strip()
+    notes = notes.strip()
+    try:
+        create_raid_definition(title, difficulty, player_count, min_item_level, notes)
+        query = urlencode(
+            {
+                "message": "Raid creation successful",
+            }
+        )
+        return RedirectResponse(url=f"/raids?{query}", status_code=303)
+    except Exception:
+        query = urlencode(
+            {
+                "message": "Raid creation failed",
+            }
+        )
+        return RedirectResponse(url=f"/raids?{query}", status_code=303)
 
 
 @app.get("/members")
@@ -197,7 +241,9 @@ async def refresh_member_roster(member_id: int):
 
     if not region or not roster_name:
         query = urlencode(
-            {"message": "This member needs a saved region and roster name before it can be refreshed."}
+            {
+                "message": "This member needs a saved region and roster name before it can be refreshed."
+            }
         )
         return RedirectResponse(url=f"/members?{query}", status_code=303)
 
@@ -205,7 +251,9 @@ async def refresh_member_roster(member_id: int):
         results = await search_rosters(region, roster_name)
     except httpx.HTTPError:
         query = urlencode(
-            {"message": "Roster refresh failed because the external roster service is unavailable."}
+            {
+                "message": "Roster refresh failed because the external roster service is unavailable."
+            }
         )
         return RedirectResponse(url=f"/members?{query}", status_code=303)
 

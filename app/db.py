@@ -54,6 +54,39 @@ def init_db():
             )
             """
         )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS raid_definitions(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                difficulty TEXT NOT NULL,
+                player_count INTEGER NOT NULL,
+                min_item_level REAL NOT NULL,
+                notes TEXT DEFAULT ''
+            )
+
+            """
+        )
+
+
+def create_raid_definition(
+    title: str, difficulty: str, player_count: int, min_item_level: float, notes: str
+):
+    with get_connection() as connection:
+        connection.execute(
+            """
+                INSERT INTO raid_definitions(
+                    title, 
+                    difficulty, 
+                    player_count, 
+                    min_item_level, 
+                    notes
+                )
+                VALUES (?, ?, ?, ?, ?)
+            """,
+            (title, difficulty, player_count, min_item_level, notes),
+        )
+        connection.commit()
 
 
 def save_imported_roster(member_id: int, roster_data: dict):
@@ -104,7 +137,8 @@ def save_imported_roster(member_id: int, roster_data: dict):
                     character.get("item_level"),
                     character.get("combat_power_id"),
                     character.get("combat_power_score"),
-                    character.get("region") or roster_data.get("matched_character_region"),
+                    character.get("region")
+                    or roster_data.get("matched_character_region"),
                     character.get("server_name")
                     or roster_data.get("matched_character_server_name"),
                     1,
@@ -132,4 +166,3 @@ def delete_member(member_id: int):
             (member_id,),
         )
         connection.commit()
-
