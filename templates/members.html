@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block title %}Members | Lost Ark Scheduler{% endblock %}
+
+{% block body %}
+  <div class="page">
+    <header class="topbar">
+      <div class="title-wrap">
+        <h1>Static Members</h1>
+        <p>Manage your group roster, imported characters, and scheduler-ready player pool.</p>
+      </div>
+
+      <div class="top-actions">
+        <a class="button" href="/">Back Home</a>
+        <a class="button primary" href="/">Import Roster</a>
+      </div>
+    </header>
+
+    <div class="members-layout">
+      <aside class="sidebar">
+        <div class="sidebar-section">
+          <h2>Filters</h2>
+
+          <label for="filter-name">Member Name</label>
+          <input id="filter-name" type="text" placeholder="Search member..." />
+
+          <label for="filter-class">Class</label>
+          <select id="filter-class">
+            <option>All classes</option>
+          </select>
+
+          <label for="filter-region">Region</label>
+          <select id="filter-region">
+            <option>All regions</option>
+          </select>
+        </div>
+
+        <div class="sidebar-section">
+          <h2>Quick Actions</h2>
+          <a class="button primary" href="/" style="width: 100%; margin-bottom: 10px;">Import Characters</a>
+          <a class="button" href="/" style="width: 100%;">Create Member</a>
+        </div>
+      </aside>
+
+      <main class="content-panel">
+        <div class="content-head">
+          <h2>Member Roster</h2>
+        </div>
+
+        <section class="members-grid">
+          {% if members %}
+            {% for member in members %}
+              {% set member_characters = characters_by_member.get(member.id, []) %}
+              <article class="member-card">
+                <div class="member-header">
+                  <div class="member-title">
+                    <h3>{{ member.display_name }}</h3>
+                    <p>{{ member.discord_name or "No Discord name set" }}</p>
+                  </div>
+
+                  <div class="member-meta">
+                    <span class="chip">{{ member.region or "No region" }}</span>
+                    <span class="chip">{{ member.world or "No server" }}</span>
+                    <span class="chip gold">{{ member.roster_name or "No roster" }}</span>
+                    <form action="/members/{{ member.id }}/delete" method="post">
+                      <button class="icon-button danger" type="submit">Delete Member</button>
+                    </form>
+                  </div>
+                </div>
+
+                <div class="member-body">
+                  <p class="member-notes">
+                    {{ member.notes or "No notes added yet." }}
+                  </p>
+
+                  <div class="characters-head">
+                    <h4>Characters</h4>
+                    <span class="characters-count">{{ member_characters|length }} imported</span>
+                  </div>
+
+                  {% if member_characters %}
+                    <div class="character-list">
+                      {% for character in member_characters %}
+                        <div class="character-row">
+                          <div class="character-main">
+                            <strong>{{ character.name }}</strong>
+                            <span>{{ character.class_name }}</span>
+                          </div>
+
+                          <div class="character-stat">
+                            <strong>{{ character.item_level or "-" }}</strong>
+                            <span>Item Level</span>
+                          </div>
+
+                          <div class="character-stat">
+                            <strong>{{ character.combat_power_score or "-" }}</strong>
+                            <span>Combat Power</span>
+                          </div>
+
+                          <div class="character-stat">
+                            <strong>{{ character.combat_power_id or "-" }}</strong>
+                            <span>Import Meta</span>
+                          </div>
+
+                          <div class="character-actions">
+                            <form action="/characters/{{ character.id }}/delete" method="post">
+                              <button class="icon-button danger" type="submit">Delete</button>
+                            </form>
+                          </div>
+                        </div>
+                      {% endfor %}
+                    </div>
+                  {% else %}
+                    <div class="empty-state">
+                      No imported characters yet for this member.
+                    </div>
+                  {% endif %}
+                </div>
+              </article>
+            {% endfor %}
+          {% else %}
+            <div class="empty-state">
+              No members yet. Create one from the home page and import a roster to get started.
+            </div>
+          {% endif %}
+        </section>
+      </main>
+    </div>
+  </div>
+{% endblock %}
