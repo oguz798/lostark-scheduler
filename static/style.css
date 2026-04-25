@@ -256,6 +256,15 @@ textarea {
   margin: 0;
 }
 
+.page-message {
+  margin-bottom: 18px;
+  padding: 12px 14px;
+  border: 1px solid rgba(231, 182, 92, 0.35);
+  border-radius: 12px;
+  background: rgba(231, 182, 92, 0.08);
+  color: #f4d48d;
+}
+
 .members-grid {
   display: grid;
   gap: 18px;
@@ -305,15 +314,77 @@ textarea {
   color: var(--muted);
 }
 
+.member-timestamps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin: 0 0 16px;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.characters-dropdown {
+  display: grid;
+  gap: 12px;
+}
+
 .characters-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
   margin-bottom: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+  list-style: none;
+}
+
+.characters-summary-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
 }
 
 .characters-head h4 {
   margin: 0;
+}
+
+.characters-head::-webkit-details-marker {
+  display: none;
+}
+
+.characters-toggle-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  background: rgba(110, 168, 254, 0.14);
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.toggle-icon {
+  display: inline-block;
+  font-size: 0.9rem;
+  transition: transform 0.15s ease;
+}
+
+.characters-dropdown[open] .characters-head {
+  margin-bottom: 0;
+}
+
+.characters-dropdown[open] .toggle-icon {
+  transform: rotate(180deg);
 }
 
 .characters-count {
@@ -328,7 +399,7 @@ textarea {
 
 .character-row {
   display: grid;
-  grid-template-columns: 1.5fr 1fr 1fr 1fr auto;
+  grid-template-columns: 1.5fr 1fr 1fr 1fr;
   gap: 12px;
   align-items: center;
   padding: 14px;
@@ -353,12 +424,6 @@ textarea {
   font-size: 0.95rem;
 }
 
-.character-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.character-actions form,
 .member-meta form {
   margin: 0;
 }
@@ -537,9 +602,6 @@ textarea {
     grid-template-columns: 1fr 1fr;
   }
 
-  .character-actions {
-    grid-column: 1 / -1;
-  }
 }
 
 @media (max-width: 640px) {

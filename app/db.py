@@ -1,8 +1,14 @@
 import sqlite3
+from datetime import datetime, UTC
 from pathlib import Path
+
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DB_PATH = BASE_DIR / "lostark_scheduler.sqlite3"
+
+
+def current_timestamp() -> str:
+    return datetime.now(UTC).isoformat()
 
 
 def get_connection():
@@ -52,6 +58,7 @@ def init_db():
 
 def save_imported_roster(member_id: int, roster_data: dict):
     with get_connection() as connection:
+        synced_at = current_timestamp()
         connection.execute(
             """
             UPDATE members
@@ -102,7 +109,7 @@ def save_imported_roster(member_id: int, roster_data: dict):
                     or roster_data.get("matched_character_server_name"),
                     1,
                     "lostark_bible",
-                    None,
+                    synced_at,
                 ),
             )
         connection.commit()
@@ -126,14 +133,3 @@ def delete_member(member_id: int):
         )
         connection.commit()
 
-
-def delete_character(character_id: int):
-    with get_connection() as connection:
-        connection.execute(
-            """
-            DELETE FROM characters
-            WHERE id = ?
-            """,
-            (character_id,),
-        )
-        connection.commit()

@@ -47,10 +47,15 @@
           <h2>Member Roster</h2>
         </div>
 
+        {% if message %}
+          <div class="page-message">{{ message }}</div>
+        {% endif %}
+
         <section class="members-grid">
           {% if members %}
             {% for member in members %}
               {% set member_characters = characters_by_member.get(member.id, []) %}
+              {% set last_synced_at = latest_sync_by_member.get(member.id) %}
               <article class="member-card">
                 <div class="member-header">
                   <div class="member-title">
@@ -62,6 +67,11 @@
                     <span class="chip">{{ member.region or "No region" }}</span>
                     <span class="chip">{{ member.world or "No server" }}</span>
                     <span class="chip gold">{{ member.roster_name or "No roster" }}</span>
+                    {% if member.region and member.roster_name %}
+                      <form action="/members/{{ member.id }}/refresh" method="post">
+                        <button class="button" type="submit">Refresh</button>
+                      </form>
+                    {% endif %}
                     <form action="/members/{{ member.id }}/delete" method="post">
                       <button class="icon-button danger" type="submit">Delete Member</button>
                     </form>
@@ -73,48 +83,52 @@
                     {{ member.notes or "No notes added yet." }}
                   </p>
 
-                  <div class="characters-head">
-                    <h4>Characters</h4>
-                    <span class="characters-count">{{ member_characters|length }} imported</span>
+                  <div class="member-timestamps">
+                    <span>Created: {{ member.created_at_formatted }}</span>
+                    <span>Last refresh: {{ last_synced_at or "Never refreshed" }}</span>
                   </div>
 
-                  {% if member_characters %}
-                    <div class="character-list">
-                      {% for character in member_characters %}
-                        <div class="character-row">
-                          <div class="character-main">
-                            <strong>{{ character.name }}</strong>
-                            <span>{{ character.class_name }}</span>
-                          </div>
+                  <details class="characters-dropdown">
+                    <summary class="characters-head">
+                      <div class="characters-summary-main">
+                        <h4>Characters</h4>
+                        <span class="characters-count">{{ member_characters|length }} imported</span>
+                      </div>
+                      <span class="characters-toggle-label">Toggle Characters <span class="toggle-icon">▾</span></span>
+                    </summary>
 
-                          <div class="character-stat">
-                            <strong>{{ character.item_level or "-" }}</strong>
-                            <span>Item Level</span>
-                          </div>
+                    {% if member_characters %}
+                      <div class="character-list">
+                        {% for character in member_characters %}
+                          <div class="character-row">
+                            <div class="character-main">
+                              <strong>{{ character.name }}</strong>
+                              <span>{{ character.class_name }}</span>
+                            </div>
 
-                          <div class="character-stat">
-                            <strong>{{ character.combat_power_score or "-" }}</strong>
-                            <span>Combat Power</span>
-                          </div>
+                            <div class="character-stat">
+                              <strong>{{ character.item_level or "-" }}</strong>
+                              <span>Item Level</span>
+                            </div>
 
-                          <div class="character-stat">
-                            <strong>{{ character.combat_power_id or "-" }}</strong>
-                            <span>Import Meta</span>
-                          </div>
+                            <div class="character-stat">
+                              <strong>{{ character.combat_power_score or "-" }}</strong>
+                              <span>Combat Power</span>
+                            </div>
 
-                          <div class="character-actions">
-                            <form action="/characters/{{ character.id }}/delete" method="post">
-                              <button class="icon-button danger" type="submit">Delete</button>
-                            </form>
+                            <div class="character-stat">
+                              <strong>{{ character.combat_power_id or "-" }}</strong>
+                              <span>Import Meta</span>
+                            </div>
                           </div>
-                        </div>
-                      {% endfor %}
-                    </div>
-                  {% else %}
-                    <div class="empty-state">
-                      No imported characters yet for this member.
-                    </div>
-                  {% endif %}
+                        {% endfor %}
+                      </div>
+                    {% else %}
+                      <div class="empty-state">
+                        No imported characters yet for this member.
+                      </div>
+                    {% endif %}
+                  </details>
                 </div>
               </article>
             {% endfor %}

@@ -16,6 +16,13 @@
       </div>
     </header>
 
+    {% if error %}
+      <section class="empty-state">
+        <h2>Search unavailable</h2>
+        <p>{{ error }}</p>
+      </section>
+    {% endif %}
+
     {% if results %}
       <section class="results">
         {% for result in results %}
@@ -96,7 +103,7 @@
           </article>
         {% endfor %}
       </section>
-    {% else %}
+    {% elif not error %}
       <section class="empty-state">
         <h2>No results found</h2>
         <p>We couldn't find any roster matches for this search. Try another region or double-check the character name.</p>
