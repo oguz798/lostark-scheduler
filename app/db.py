@@ -1,5 +1,5 @@
 import sqlite3
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from pathlib import Path
 
 
@@ -12,14 +12,12 @@ def current_timestamp() -> str:
 
 
 def get_connection():
-
     connection = sqlite3.connect(DB_PATH)
     connection.row_factory = sqlite3.Row
     return connection
 
 
 def init_db():
-
     with get_connection() as connection:
         connection.execute(
             """
@@ -44,6 +42,7 @@ def init_db():
                 class_name TEXT NOT NULL,
                 item_level REAL,
                 combat_power_id INTEGER,
+                combat_role TEXT,
                 combat_power_score REAL,
                 region TEXT,
                 world TEXT,
@@ -56,7 +55,7 @@ def init_db():
         )
         connection.execute(
             """
-            CREATE TABLE IF NOT EXISTS raid_definitions(
+            CREATE TABLE IF NOT EXISTS raid_definitions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 title TEXT NOT NULL,
                 difficulty TEXT NOT NULL,
@@ -64,27 +63,145 @@ def init_db():
                 min_item_level REAL NOT NULL,
                 notes TEXT DEFAULT ''
             )
-
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS weeks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                start_date TEXT NOT NULL,
+                notes TEXT DEFAULT ''
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS scheduled_raids (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                week_id INTEGER NOT NULL,
+                raid_definition_id INTEGER NOT NULL,
+                day TEXT NOT NULL,
+                group_number INTEGER NOT NULL,
+                start_time TEXT,
+                notes TEXT DEFAULT '',
+                sort_order INTEGER NOT NULL,
+                FOREIGN KEY (week_id) REFERENCES weeks(id),
+                FOREIGN KEY (raid_definition_id) REFERENCES raid_definitions(id)
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS scheduled_raid_assignments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                scheduled_raid_id INTEGER NOT NULL,
+                character_id INTEGER NOT NULL,
+                slot_order INTEGER NOT NULL,
+                notes TEXT DEFAULT '',
+                FOREIGN KEY (scheduled_raid_id) REFERENCES scheduled_raids(id),
+                FOREIGN KEY (character_id) REFERENCES characters(id)
+            )
             """
         )
 
-
-def create_raid_definition(
-    title: str, difficulty: str, player_count: int, min_item_level: float, notes: str
+def create_raid_assignment(
+    scheduled_raid_id: int,
+    character_id: int,
+    slot_order: int,
+    notes: str | None,
 ):
     with get_connection() as connection:
         connection.execute(
             """
-                INSERT INTO raid_definitions(
-                    title, 
-                    difficulty, 
-                    player_count, 
-                    min_item_level, 
-                    notes
-                )
-                VALUES (?, ?, ?, ?, ?)
+            INSERT INTO scheduled_raid_assignments (
+                scheduled_raid_id,
+                character_id,
+                slot_order,
+                notes
+            )
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                scheduled_raid_id,
+                character_id,
+                slot_order,
+                notes,          
+            ),
+        )
+        connection.commit()
+
+
+def create_scheduled_raid(
+    week_id: int,
+    raid_definition_id: int,
+    day: str,
+    group_number: int,
+    start_time: str | None,
+    notes: str | None,
+    sort_order: int,
+):
+    with get_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO scheduled_raids (
+                week_id,
+                raid_definition_id,
+                day,
+                group_number,
+                start_time,
+                notes,
+                sort_order
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                week_id,
+                raid_definition_id,
+                day,
+                group_number,
+                start_time,
+                notes,
+                sort_order,
+            ),
+        )
+        connection.commit()
+
+
+def create_raid_definition(
+    title: str,
+    difficulty: str,
+    player_count: int,
+    min_item_level: float,
+    notes: str | None,
+):
+    with get_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO raid_definitions (
+                title,
+                difficulty,
+                player_count,
+                min_item_level,
+                notes
+            )
+            VALUES (?, ?, ?, ?, ?)
             """,
             (title, difficulty, player_count, min_item_level, notes),
+        )
+        connection.commit()
+
+
+def create_week(start_date: str, notes: str):
+    with get_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO weeks (
+                start_date,
+                notes
+            )
+            VALUES (?, ?)
+            """,
+            (start_date, notes),
         )
         connection.commit()
 
@@ -121,6 +238,7 @@ def save_imported_roster(member_id: int, roster_data: dict):
                     class_name,
                     item_level,
                     combat_power_id,
+                    combat_role,
                     combat_power_score,
                     region,
                     world,
@@ -128,7 +246,7 @@ def save_imported_roster(member_id: int, roster_data: dict):
                     source,
                     last_synced_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     member_id,
@@ -136,6 +254,7 @@ def save_imported_roster(member_id: int, roster_data: dict):
                     character.get("class_name"),
                     character.get("item_level"),
                     character.get("combat_power_id"),
+                    character.get("combat_role"),
                     character.get("combat_power_score"),
                     character.get("region")
                     or roster_data.get("matched_character_region"),

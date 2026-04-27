@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+
 @dataclass
 class TopCharacter:
     name: str
@@ -8,7 +9,9 @@ class TopCharacter:
     server_name: str | None
     item_level: float | None
     combat_power_id: int | None
+    combat_role: str | None
     combat_power_score: float | None
+
 
 @dataclass
 class RosterSearchResult:

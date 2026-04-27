@@ -27,6 +27,7 @@ CLASS_NAME_MAP = {
     "hawkeye": "Sharpshooter",
     "holy_knight": "Paladin",
     "infighter": "Scrapper",
+    "infighter_male": "Breaker",
     "lance_master": "Glaivier",
     "paladin": "Paladin",
     "scouter": "Machinist",
@@ -49,8 +50,7 @@ CLASS_NAME_MAP = {
     "weather_artist": "Aeromancer",
     "slayer": "Slayer",
     "soul_eater": "Souleater",
-    "breaker": "Breaker",
-    "dragon_knight": "Guardian Knight",
+    "dragon_knight": "Guardianknight",
     "holyknight_female": "Valkyrie",
     "alchemist": "Wildsoul",
 }
@@ -63,6 +63,15 @@ def _map_class_name(class_name: str | None) -> str:
     return CLASS_NAME_MAP.get(class_name, class_name)
 
 
+def _map_combat_role(combat_power_id: int | None) -> str | None:
+    if combat_power_id == 1:
+        return "dps"
+    elif combat_power_id == 2:
+        return "support"
+    else:
+        return None
+
+
 async def _format_top_characters(
     characters: list[dict[str, Any]], enrich_raid_loadout: bool = False
 ) -> list[TopCharacter]:
@@ -71,12 +80,14 @@ async def _format_top_characters(
     if not enrich_raid_loadout:
         for character in characters:
             combat_power = character.get("combat_power") or {}
+            combat_power_id = combat_power.get("id")
             formatted_characters.append(
                 TopCharacter(
                     name=character.get("name", ""),
                     class_name=_map_class_name(character.get("class")),
                     item_level=character.get("item_level"),
-                    combat_power_id=combat_power.get("id"),
+                    combat_power_id=combat_power_id,
+                    combat_role=_map_combat_role(combat_power_id),
                     combat_power_score=combat_power.get("score"),
                     region=character.get("region"),
                     server_name=character.get("world"),
@@ -93,6 +104,7 @@ async def _format_top_characters(
     html_results = await asyncio.gather(*fetch_tasks)
     for character, html_text in zip(characters, html_results):
         combat_power = character.get("combat_power") or {}
+        combat_power_id = combat_power.get("id")
         raid_loadout_score = _extract_raid_loadout_combat_power(html_text)
         combat_power_score = (
             raid_loadout_score
@@ -104,7 +116,8 @@ async def _format_top_characters(
                 name=character.get("name", ""),
                 class_name=_map_class_name(character.get("class")),
                 item_level=character.get("item_level"),
-                combat_power_id=combat_power.get("id"),
+                combat_power_id=combat_power_id,
+                combat_role=_map_combat_role(combat_power_id),
                 combat_power_score=combat_power_score,
                 region=character.get("region"),
                 server_name=character.get("world"),

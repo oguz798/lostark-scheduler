@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+
+{% block title %}Week Detail | Lost Ark Scheduler{% endblock %}
+
+{% block body %}
+  <div class="page">
+    <header class="topbar">
+      <div class="title-wrap">
+        <h1>Week Beginning {{ week.start_date }}</h1>
+        <p>{{ week.notes or "Build and review the weekly raid schedule for this reset window." }}</p>
+      </div>
+
+      <div class="top-actions">
+        <a class="button" href="/weeks">Back To Weeks</a>
+        <a class="button primary" href="/raids">View Raids</a>
+      </div>
+    </header>
+
+    <div class="members-layout">
+      <aside class="sidebar">
+        <div class="sidebar-section">
+          <h2>Add Scheduled Raid</h2>
+
+          <form action="/weeks/{{ week.id }}/raids/create" method="post">
+            <label for="raid-definition-id">Raid</label>
+            <select id="raid-definition-id" name="raid_definition_id" required>
+              <option value="">Select a raid</option>
+              {% for raid_definition in raid_definitions %}
+                <option value="{{ raid_definition.id }}">
+                  {{ raid_definition.title }} {{ raid_definition.difficulty }}
+                </option>
+              {% endfor %}
+            </select>
+
+            <label for="scheduled-day">Day</label>
+            <select id="scheduled-day" name="day" required>
+              <option value="Wed">Wed</option>
+              <option value="Thu">Thu</option>
+              <option value="Fri">Fri</option>
+              <option value="Sat">Sat</option>
+              <option value="Sun">Sun</option>
+            </select>
+
+            <label for="group-number">Group Number</label>
+            <input id="group-number" name="group_number" type="number" min="1" step="1" required />
+
+            <label for="start-time">Start Time</label>
+            <input id="start-time" name="start_time" type="time" />
+
+            <label for="sort-order">Sort Order</label>
+            <input id="sort-order" name="sort_order" type="number" min="1" step="1" required />
+
+            <label for="scheduled-notes">Notes</label>
+            <textarea id="scheduled-notes" name="notes" rows="4" placeholder="Optional notes like after previous, hard stop, fill needs..."></textarea>
+
+            <button class="button primary" type="submit" style="width: 100%; margin-top: 12px;">Add Raid</button>
+          </form>
+        </div>
+      </aside>
+
+      <main class="content-panel">
+        <div class="content-head">
+          <h2>Scheduled Raids</h2>
+        </div>
+
+        {% if message %}
+          <div class="page-message">{{ message }}</div>
+        {% endif %}
+
+        <section class="members-grid">
+          {% if scheduled_raids %}
+            {% for scheduled_raid in scheduled_raids %}
+              <article class="member-card">
+                <div class="member-header">
+                  <div class="member-title">
+                    <h3>{{ scheduled_raid.day }}{% if scheduled_raid.start_time %} - {{ scheduled_raid.start_time }}  {% endif %}</h3>
+                    <h3>{{ scheduled_raid.raid_title }} - {{ scheduled_raid.raid_difficulty }}</h3> 
+                    <p>Group {{ scheduled_raid.group_number }} | Order {{ scheduled_raid.sort_order }}</p>
+                  </div>
+                </div>
+                <div class="character-list">
+                  {% for assignment in scheduled_raid_assignments %}
+                    {% if assignment.scheduled_raid_id == scheduled_raid.id %}
+                      <div class="character-row">
+                        <div class="character-main">
+                          <strong>{{ assignment.character_name }}</strong>
+                          <span>{{ assignment.class_name }}</span>
+                        </div>
+
+                        <div class="character-stat">
+                          <strong>{{ assignment.item_level or "-" }}</strong>
+                          <span>Item Level</span>
+                        </div>
+
+                        <div class="character-stat">
+                          <strong>{{ assignment.combat_power_score or "-" }}</strong>
+                          <span>Combat Power</span>
+                        </div>
+
+                        <div class="character-stat">
+                          <strong>
+                            {% if assignment.combat_role == "dps" %}
+                              DPS
+                            {% elif assignment.combat_role == "support" %}
+                              Support
+                            {% endif %}
+                          </strong>
+                        </div>
+                      </div>
+                    {% endif %}
+                  {% endfor %}
+                </div>
+
+                <div class="member-body">
+                  <p class="member-notes">
+                    {{ scheduled_raid.notes or "No notes added yet." }}
+                  </p>
+
+                  <form action="/scheduled-raids/{{ scheduled_raid.id }}/assignments/create" method="post">
+                    <input type="hidden" name="week_id" value="{{ week.id }}" />
+
+                    <label for="character-{{ scheduled_raid.id }}">Character</label>
+                    <select id="character-{{ scheduled_raid.id }}" name="character_id" required>
+                      <option value="">Select a character</option>
+                      {% for character in characters %}
+                        <option value="{{ character.id }}">
+                          {{ character.name }} - {{ character.class_name }} - {{ character.item_level or "-" }}
+                        </option>
+                      {% endfor %}
+                    </select>
+
+                    <label for="slot-order-{{ scheduled_raid.id }}">Slot Order</label>
+                    <input id="slot-order-{{ scheduled_raid.id }}" name="slot_order" type="number" min="1" step="1" required />
+
+                    <label for="assignment-notes-{{ scheduled_raid.id }}">Assignment Notes</label>
+                    <input id="assignment-notes-{{ scheduled_raid.id }}" name="notes" type="text" placeholder="Optional assignment notes" />
+
+                    <button class="button" type="submit" style="margin-top: 12px;">Assign Character</button>
+                  </form>
+                </div>
+              </article>
+            {% endfor %}
+          {% else %}
+            <div class="empty-state">
+              No raids scheduled for this week yet. Add the first one from the form.
+            </div>
+          {% endif %}
+        </section>
+      </main>
+    </div>
+  </div>
+{% endblock %}

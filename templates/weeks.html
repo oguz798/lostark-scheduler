@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block title %}Weeks | Lost Ark Scheduler{% endblock %}
+
+{% block body %}
+  <div class="page">
+    <header class="topbar">
+      <div class="title-wrap">
+        <h1>Weeks</h1>
+        <p>Create weekly planning windows and keep your schedule history organized.</p>
+      </div>
+
+      <div class="top-actions">
+        <a class="button" href="/">Back Home</a>
+        <a class="button primary" href="/raids">View Raids</a>
+      </div>
+    </header>
+
+    <div class="members-layout">
+      <aside class="sidebar">
+        <div class="sidebar-section">
+          <h2>Create Week</h2>
+
+          <form action="/weeks/create" method="post">
+            <label for="week-start-date">Week Start Date</label>
+            <input id="week-start-date" name="start_date" type="date" value="{{ default_start_date }}" required />
+
+            <label for="week-notes">Notes</label>
+            <textarea id="week-notes" name="notes" rows="5" placeholder="Optional planning notes for this week..."></textarea>
+
+            <button class="button primary" type="submit" style="width: 100%; margin-top: 12px;">Create Week</button>
+          </form>
+        </div>
+      </aside>
+
+      <main class="content-panel">
+        <div class="content-head">
+          <h2>Week Library</h2>
+        </div>
+
+        {% if message %}
+          <div class="page-message">{{ message }}</div>
+        {% endif %}
+
+        <section class="members-grid">
+          {% if weeks %}
+            {% for week in weeks %}
+              <article class="member-card">
+                <div class="member-header">
+                  <div class="member-title">
+                    <h3>Week Beginning {{ week.start_date }}</h3>
+                    <p>{{ week.notes or "No notes added yet." }}</p>
+                  </div>
+                  <form action="/weeks/{{ week.id }}" method="get">
+                        <button class="button" type="submit">View Week</button>
+                      </form>
+                </div>
+              </article>
+            {% endfor %}
+          {% else %}
+            <div class="empty-state">
+              No weeks yet. Create your first weekly planning window to get started.
+            </div>
+          {% endif %}
+        </section>
+      </main>
+    </div>
+  </div>
+{% endblock %}

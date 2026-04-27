@@ -117,8 +117,13 @@
                             </div>
 
                             <div class="character-stat">
-                              <strong>{{ character.combat_power_id or "-" }}</strong>
-                              <span>Import Meta</span>
+                              <strong>
+                              {% if character.combat_role == "dps" %}
+                                DPS
+                              {% elif character.combat_role == "support" %}
+                                Support
+                              {% endif %}
+                              </strong>              
                             </div>
                           </div>
                         {% endfor %}
