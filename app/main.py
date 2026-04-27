@@ -184,7 +184,7 @@ async def import_roster(
     roster_id: int = Form(...),
 ):
     try:
-        results = await search_rosters(region, name)
+        results = await search_rosters(region, name, enrich_raid_loadout=True)
     except httpx.HTTPError:
         query = urlencode(
             {
@@ -248,7 +248,7 @@ async def refresh_member_roster(member_id: int):
         return RedirectResponse(url=f"/members?{query}", status_code=303)
 
     try:
-        results = await search_rosters(region, roster_name)
+        results = await search_rosters(region, roster_name, enrich_raid_loadout=True)
     except httpx.HTTPError:
         query = urlencode(
             {

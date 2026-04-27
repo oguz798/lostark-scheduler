@@ -1,9 +1,15 @@
+import asyncio
+import re
+from urllib.parse import quote
 from typing import Any
-from app.schemas import TopCharacter, RosterSearchResult
+
 import httpx
 
+from app.schemas import TopCharacter, RosterSearchResult
 
+SITE_URL = "https://lostark.bible"
 API_URL = "https://lostark.bible/api/link/search"
+
 REQUEST_TIMEOUT = 20
 
 CLASS_NAME_MAP = {
@@ -35,16 +41,18 @@ CLASS_NAME_MAP = {
     "summoner": "Summoner",
     "wardancer": "Wardancer",
     "warlord": "Gunlancer",
-    "artist": "Artist",
+    "yinyangshi": "Artist",
     "reaper": "Reaper",
     "machinist": "Machinist",
     "arcanist": "Arcanist",
     "glaivier": "Glaivier",
-    "aeromancer": "Aeromancer",
+    "weather_artist": "Aeromancer",
     "slayer": "Slayer",
     "soul_eater": "Souleater",
     "breaker": "Breaker",
     "dragon_knight": "Guardian Knight",
+    "holyknight_female": "Valkyrie",
+    "alchemist": "Wildsoul",
 }
 
 
@@ -55,27 +63,59 @@ def _map_class_name(class_name: str | None) -> str:
     return CLASS_NAME_MAP.get(class_name, class_name)
 
 
-def _format_top_characters(characters: list[dict[str, Any]]) -> list[TopCharacter]:
+async def _format_top_characters(
+    characters: list[dict[str, Any]], enrich_raid_loadout: bool = False
+) -> list[TopCharacter]:
     formatted_characters = []
 
-    for character in characters:
+    if not enrich_raid_loadout:
+        for character in characters:
+            combat_power = character.get("combat_power") or {}
+            formatted_characters.append(
+                TopCharacter(
+                    name=character.get("name", ""),
+                    class_name=_map_class_name(character.get("class")),
+                    item_level=character.get("item_level"),
+                    combat_power_id=combat_power.get("id"),
+                    combat_power_score=combat_power.get("score"),
+                    region=character.get("region"),
+                    server_name=character.get("world"),
+                )
+            )
+        return formatted_characters
+
+    fetch_tasks = [
+        _fetch_character_page_html(
+            character.get("region", ""), character.get("name", "")
+        )
+        for character in characters
+    ]
+    html_results = await asyncio.gather(*fetch_tasks)
+    for character, html_text in zip(characters, html_results):
         combat_power = character.get("combat_power") or {}
+        raid_loadout_score = _extract_raid_loadout_combat_power(html_text)
+        combat_power_score = (
+            raid_loadout_score
+            if raid_loadout_score is not None
+            else combat_power.get("score")
+        )
         formatted_characters.append(
             TopCharacter(
                 name=character.get("name", ""),
                 class_name=_map_class_name(character.get("class")),
                 item_level=character.get("item_level"),
                 combat_power_id=combat_power.get("id"),
-                combat_power_score=combat_power.get("score"),
+                combat_power_score=combat_power_score,
                 region=character.get("region"),
                 server_name=character.get("world"),
             )
         )
-
     return formatted_characters
 
 
-def _format_roster_results(payload: list[dict[str, Any]]) -> list[RosterSearchResult]:
+async def _format_roster_results(
+    payload: list[dict[str, Any]], enrich_raid_loadout: bool = False
+) -> list[RosterSearchResult]:
     results = []
 
     for item in payload:
@@ -88,7 +128,9 @@ def _format_roster_results(payload: list[dict[str, Any]]) -> list[RosterSearchRe
                 matched_character_region=matched_character.get("region"),
                 matched_character_server_name=matched_character.get("world"),
                 total_characters=item.get("total_characters"),
-                top_characters=_format_top_characters(item.get("top_characters") or []),
+                top_characters=await _format_top_characters(
+                    item.get("top_characters") or [], enrich_raid_loadout
+                ),
             )
         )
 
@@ -99,7 +141,9 @@ def _normalize_character_name(character_name: str) -> str:
     return character_name.strip().title()
 
 
-async def search_rosters(region: str, character_name: str) -> list[RosterSearchResult]:
+async def search_rosters(
+    region: str, character_name: str, enrich_raid_loadout: bool = False
+) -> list[RosterSearchResult]:
     normalized_name = _normalize_character_name(character_name)
     params = {"region": region, "name": normalized_name}
 
@@ -108,4 +152,37 @@ async def search_rosters(region: str, character_name: str) -> list[RosterSearchR
         response.raise_for_status()
         payload = response.json()
 
-    return _format_roster_results(payload)
+    return await _format_roster_results(
+        payload, enrich_raid_loadout=enrich_raid_loadout
+    )
+
+
+async def _fetch_character_page_html(region: str, character_name: str) -> str | None:
+    normalized_name = _normalize_character_name(character_name)
+    encoded_name = quote(normalized_name)
+
+    async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
+        try:
+            response = await client.get(f"{SITE_URL}/character/{region}/{encoded_name}")
+            response.raise_for_status()
+            return response.text
+        except httpx.HTTPError:
+            return None
+
+
+def _extract_raid_loadout_combat_power(html_text: str | None) -> float | None:
+    if not html_text:
+        return None
+
+    match = re.search(
+        r'classification:"most_recent_raid".*?combatPower:\{id:\d+,score:([0-9.]+)\}',
+        html_text,
+        re.DOTALL,
+    )
+    if not match:
+        return None
+
+    try:
+        return float(match.group(1))
+    except ValueError:
+        return None
