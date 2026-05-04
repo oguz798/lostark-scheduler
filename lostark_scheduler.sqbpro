@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?><sqlb_project><db path="lostark_scheduler.sqlite3" readonly="0" foreign_keys="1" case_sensitive_like="0" temp_store="0" wal_autocheckpoint="1000" synchronous="2"/><attached/><window><main_tabs open="structure browser pragmas query" current="0"/></window><tab_structure><column_width id="0" width="300"/><column_width id="1" width="0"/><column_width id="2" width="100"/><column_width id="3" width="2385"/><column_width id="4" width="0"/><expanded_item id="0" parent="1"/><expanded_item id="1" parent="1"/><expanded_item id="2" parent="1"/><expanded_item id="3" parent="1"/></tab_structure><tab_browse><table title="characters" custom_title="0" dock_id="1" table="4,10:maincharacters"/><dock_state state="000000ff00000000fd0000000100000002000002360000020cfc0100000001fb000000160064006f0063006b00420072006f00770073006500310100000000000002360000011e00ffffff000002360000000000000004000000040000000800000008fc00000000"/><default_encoding codec=""/><browse_table_settings><table schema="main" name="characters" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk="_rowid_" freeze_columns="0"><sort/><column_widths><column index="1" value="35"/><column index="2" value="75"/><column index="3" value="79"/><column index="4" value="119"/><column index="5" value="79"/><column index="6" value="110"/><column index="7" value="80"/><column index="8" value="131"/><column index="9" value="44"/><column index="10" value="47"/><column index="11" value="59"/><column index="12" value="111"/><column index="13" value="263"/></column_widths><filter_values/><conditional_formats/><row_id_formats/><display_formats/><hidden_columns/><plot_y_axes/><global_filter/></table></browse_table_settings></tab_browse><tab_sql><sql name="SQL 1*">PRAGMA foreign_keys = OFF;
+
+CREATE TABLE scheduled_raids_new (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    week_id INTEGER NOT NULL,
+    raid_definition_id INTEGER NOT NULL,
+    day TEXT NOT NULL,
+    group_number INTEGER NOT NULL,
+    start_time TEXT,
+    notes TEXT DEFAULT '',
+    sort_order INTEGER NOT NULL,
+    FOREIGN KEY (week_id) REFERENCES weeks(id),
+    FOREIGN KEY (raid_definition_id) REFERENCES raid_definitions(id)
+);
+
+INSERT INTO scheduled_raids_new (
+    id,
+    week_id,
+    raid_definition_id,
+    day,
+    group_number,
+    start_time,
+    notes,
+    sort_order
+)
+SELECT
+    id,
+    week_id,
+    raid_definition_id,
+    day,
+    group_number,
+    start_time,
+    notes,
+    sort_order
+FROM scheduled_raids;
+
+DROP TABLE scheduled_raids;
+
+ALTER TABLE scheduled_raids_new RENAME TO scheduled_raids;
+
+PRAGMA foreign_keys = ON;
+</sql><current_tab id="0"/></tab_sql></sqlb_project>

@@ -7,6 +7,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 DB_PATH = BASE_DIR / "lostark_scheduler.sqlite3"
 
 
+# Connection / time helpers
 def current_timestamp() -> str:
     return datetime.now(UTC).isoformat()
 
@@ -17,6 +18,7 @@ def get_connection():
     return connection
 
 
+# Schema init
 def init_db():
     with get_connection() as connection:
         connection.execute(
@@ -104,6 +106,86 @@ def init_db():
             """
         )
 
+
+# Roster import sync
+def save_imported_roster(member_id: int, roster_data: dict):
+    with get_connection() as connection:
+        synced_at = current_timestamp()
+        connection.execute(
+            """
+            UPDATE members
+            SET region = ?, world = ?, roster_name = ?
+            WHERE id = ?
+            """,
+            (
+                roster_data.get("matched_character_region"),
+                roster_data.get("matched_character_server_name"),
+                roster_data.get("matched_character_name"),
+                member_id,
+            ),
+        )
+        connection.execute(
+            """
+            DELETE FROM characters
+            WHERE member_id = ?
+            """,
+            (member_id,),
+        )
+        for character in roster_data.get("top_characters", []):
+            connection.execute(
+                """
+                INSERT INTO characters (
+                    member_id,
+                    name,
+                    class_name,
+                    item_level,
+                    combat_power_id,
+                    combat_role,
+                    combat_power_score,
+                    region,
+                    world,
+                    is_active,
+                    source,
+                    last_synced_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    member_id,
+                    character.get("name"),
+                    character.get("class_name"),
+                    character.get("item_level"),
+                    character.get("combat_power_id"),
+                    character.get("combat_role"),
+                    character.get("combat_power_score"),
+                    character.get("region")
+                    or roster_data.get("matched_character_region"),
+                    character.get("server_name")
+                    or roster_data.get("matched_character_server_name"),
+                    1,
+                    "lostark_bible",
+                    synced_at,
+                ),
+            )
+        connection.commit()
+
+
+# Create operations
+def create_week(start_date: str, notes: str):
+    with get_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO weeks (
+                start_date,
+                notes
+            )
+            VALUES (?, ?)
+            """,
+            (start_date, notes),
+        )
+        connection.commit()
+
+
 def create_raid_assignment(
     scheduled_raid_id: int,
     character_id: int,
@@ -125,7 +207,7 @@ def create_raid_assignment(
                 scheduled_raid_id,
                 character_id,
                 slot_order,
-                notes,          
+                notes,
             ),
         )
         connection.commit()
@@ -191,85 +273,162 @@ def create_raid_definition(
         connection.commit()
 
 
-def create_week(start_date: str, notes: str):
+# Count/query helpers
+def count_scheduled_raids_for_definition(raid_definition_id: int) -> int:
+    with get_connection() as connection:
+        row = connection.execute(
+            "SELECT COUNT(*) FROM scheduled_raids WHERE raid_definition_id = ?",
+            (raid_definition_id,),
+        ).fetchone()
+
+        return row[0]
+
+
+def count_scheduled_raids_for_week(week_id: int) -> int:
+    with get_connection() as connection:
+        row = connection.execute(
+            "SELECT COUNT(*) FROM scheduled_raids WHERE week_id = ?",
+            (week_id,),
+        ).fetchone()
+
+        return row[0]
+
+
+def count_assignments_for_scheduled_raid(scheduled_raid_id: int) -> int:
+    with get_connection() as connection:
+        row = connection.execute(
+            "SELECT COUNT(*) FROM scheduled_raid_assignments WHERE scheduled_raid_id = ?",
+            (scheduled_raid_id,),
+        ).fetchone()
+
+        return row[0]
+
+
+def count_assignments_for_member(member_id: int) -> int:
+    with get_connection() as connection:
+        row = connection.execute(
+            """
+            SELECT COUNT(*)
+            FROM scheduled_raid_assignments
+            WHERE character_id IN (
+                SELECT id
+                FROM characters
+                WHERE member_id = ?
+            )
+            """,
+            (member_id,),
+        ).fetchone()
+
+        return row[0]
+
+
+def count_assignments_for_character(character_id: int) -> int:
+    with get_connection() as connection:
+        row = connection.execute(
+            """
+            SELECT COUNT(*)
+            FROM scheduled_raid_assignments
+            WHERE character_id = ?
+            """,
+            (character_id,),
+        ).fetchone()
+
+        return row[0]
+
+
+# Delete operations (cascading behavior)
+def delete_raid_definition(raid_definition_id: int):
     with get_connection() as connection:
         connection.execute(
             """
-            INSERT INTO weeks (
-                start_date,
-                notes
+            DELETE FROM scheduled_raid_assignments
+            WHERE scheduled_raid_id IN (
+                SELECT id
+                FROM scheduled_raids
+                WHERE raid_definition_id = ?
             )
-            VALUES (?, ?)
             """,
-            (start_date, notes),
+            (raid_definition_id,),
+        )
+        connection.execute(
+            """
+            DELETE FROM scheduled_raids
+            WHERE raid_definition_id = ?
+            """,
+            (raid_definition_id,),
+        )
+        connection.execute(
+            """
+            DELETE FROM raid_definitions
+            WHERE id = ?
+            """,
+            (raid_definition_id,),
         )
         connection.commit()
 
 
-def save_imported_roster(member_id: int, roster_data: dict):
+def delete_scheduled_raid(scheduled_raid_id: int):
     with get_connection() as connection:
-        synced_at = current_timestamp()
         connection.execute(
             """
-            UPDATE members
-            SET region = ?, world = ?, roster_name = ?
+            DELETE FROM scheduled_raid_assignments
+            WHERE scheduled_raid_id = ?
+            """,
+            (scheduled_raid_id,),
+        )
+        connection.execute(
+            """
+            DELETE FROM scheduled_raids
             WHERE id = ?
             """,
-            (
-                roster_data.get("matched_character_region"),
-                roster_data.get("matched_character_server_name"),
-                roster_data.get("matched_character_name"),
-                member_id,
-            ),
+            (scheduled_raid_id,),
+        )
+        connection.commit()
+
+
+def delete_week(week_id: int):
+    with get_connection() as connection:
+        connection.execute(
+            """
+            DELETE FROM scheduled_raid_assignments
+            WHERE scheduled_raid_id IN (
+                SELECT id
+                FROM scheduled_raids
+                WHERE week_id = ?
+            )
+            """,
+            (week_id,),
         )
         connection.execute(
             """
-            DELETE FROM characters
-            WHERE member_id = ?
+            DELETE FROM scheduled_raids
+            WHERE week_id = ?
             """,
-            (member_id,),
+            (week_id,),
         )
-        for character in roster_data.get("top_characters", []):
-            connection.execute(
-                """
-                INSERT INTO characters (
-                    member_id,
-                    name,
-                    class_name,
-                    item_level,
-                    combat_power_id,
-                    combat_role,
-                    combat_power_score,
-                    region,
-                    world,
-                    is_active,
-                    source,
-                    last_synced_at
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    member_id,
-                    character.get("name"),
-                    character.get("class_name"),
-                    character.get("item_level"),
-                    character.get("combat_power_id"),
-                    character.get("combat_role"),
-                    character.get("combat_power_score"),
-                    character.get("region")
-                    or roster_data.get("matched_character_region"),
-                    character.get("server_name")
-                    or roster_data.get("matched_character_server_name"),
-                    1,
-                    "lostark_bible",
-                    synced_at,
-                ),
-            )
+        connection.execute(
+            """
+            DELETE FROM weeks
+            WHERE id = ?
+            """,
+            (week_id,),
+        )
         connection.commit()
 
 
 def delete_member(member_id: int):
     with get_connection() as connection:
+        connection.execute(
+            """
+            DELETE FROM scheduled_raid_assignments
+            WHERE character_id IN (
+                SELECT id
+                FROM characters
+                WHERE member_id = ?
+            )
+            """,
+            (member_id,),
+        )
         connection.execute(
             """
             DELETE FROM characters
@@ -283,5 +442,27 @@ def delete_member(member_id: int):
             WHERE id = ?
             """,
             (member_id,),
+        )
+        connection.commit()
+
+
+def delete_character(member_id: int, character_id: int):
+    with get_connection() as connection:
+        connection.execute(
+            """
+            DELETE FROM scheduled_raid_assignments
+            WHERE character_id =?            
+            """,
+            (character_id,),
+        )
+        connection.execute(
+            """
+            DELETE FROM characters
+            WHERE id = ? AND member_id = ?
+            """,
+            (
+                character_id,
+                member_id,
+            ),
         )
         connection.commit()

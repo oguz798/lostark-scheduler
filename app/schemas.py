@@ -20,5 +20,9 @@ class RosterSearchResult:
     matched_character_class: str | None
     matched_character_region: str | None
     matched_character_server_name: str | None
+    matched_character_item_level: float | None
+    matched_character_combat_power_id: int | None
+    matched_character_combat_role: str | None
+    matched_character_combat_power: float | None
     total_characters: int | None
     top_characters: list[TopCharacter]

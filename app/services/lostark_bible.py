@@ -11,6 +11,8 @@ SITE_URL = "https://lostark.bible"
 API_URL = "https://lostark.bible/api/link/search"
 
 REQUEST_TIMEOUT = 20
+# Keep enrichment code available for future use, but disable it by default for current API/policy constraints.
+ALLOW_RAID_LOADOUT_ENRICH = False
 
 CLASS_NAME_MAP = {
     "arcana": "Arcanist",
@@ -75,6 +77,7 @@ def _map_combat_role(combat_power_id: int | None) -> str | None:
 async def _format_top_characters(
     characters: list[dict[str, Any]], enrich_raid_loadout: bool = False
 ) -> list[TopCharacter]:
+    # Enriched raid-loadout scraping path is retained for future access but normally disabled by caller/flag.
     formatted_characters = []
 
     if not enrich_raid_loadout:
@@ -133,6 +136,9 @@ async def _format_roster_results(
 
     for item in payload:
         matched_character = item.get("matched_character") or {}
+        matched_combat_power = matched_character.get("combat_power") or {}
+        matched_role = _map_combat_role(matched_combat_power.get("id"))
+        matched_combat_score = matched_combat_power.get("score")
         results.append(
             RosterSearchResult(
                 roster_id=item.get("id"),
@@ -140,6 +146,10 @@ async def _format_roster_results(
                 matched_character_class=_map_class_name(matched_character.get("class")),
                 matched_character_region=matched_character.get("region"),
                 matched_character_server_name=matched_character.get("world"),
+                matched_character_item_level=matched_character.get("item_level"),
+                matched_character_combat_power_id=matched_combat_power.get("id"),
+                matched_character_combat_role=matched_role,
+                matched_character_combat_power=matched_combat_score,
                 total_characters=item.get("total_characters"),
                 top_characters=await _format_top_characters(
                     item.get("top_characters") or [], enrich_raid_loadout
@@ -157,6 +167,8 @@ def _normalize_character_name(character_name: str) -> str:
 async def search_rosters(
     region: str, character_name: str, enrich_raid_loadout: bool = False
 ) -> list[RosterSearchResult]:
+    # Enrichment requests are gated so current production behavior remains API-search only.
+    enrich_raid_loadout = enrich_raid_loadout and ALLOW_RAID_LOADOUT_ENRICH
     normalized_name = _normalize_character_name(character_name)
     params = {"region": region, "name": normalized_name}
 
@@ -178,6 +190,7 @@ async def _fetch_character_page_html(region: str, character_name: str) -> str | 
         try:
             response = await client.get(f"{SITE_URL}/character/{region}/{encoded_name}")
             response.raise_for_status()
+
             return response.text
         except httpx.HTTPError:
             return None

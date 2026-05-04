@@ -1,6 +1,6 @@
 # Lost Ark Scheduler
 
-Lost Ark Scheduler is a small FastAPI app for importing guild roster data and managing members locally as the foundation for a weekly raid planner.
+Lost Ark Scheduler is a small NiceGUI app for importing guild roster data and managing members locally as the foundation for a weekly raid planner.
 
 ## Current scope
 
@@ -10,15 +10,15 @@ Right now the app can:
 - search rosters through the LostArk Bible API
 - import top characters into a member
 - browse members and imported characters
-- delete members and characters
-
-The next planned step is weekly availability and raid planning.
+- create raid definitions
+- create weeks and scheduled raids
+- assign characters to scheduled raids
+- delete members, raid definitions, weeks, and scheduled raids
 
 ## Tech stack
 
 - Python 3.12+
-- FastAPI
-- Jinja2 templates
+- NiceGUI
 - SQLite
 - httpx
 
@@ -36,19 +36,21 @@ pip install -r requirements.txt
 ## Run the app
 
 ```powershell
-uvicorn app.main:app --reload
+python -m ui.main
 ```
 
-Then open http://127.0.0.1:8000
+Then open the local URL shown in the terminal.
 
 ## Project structure
 
-- `app/main.py`: FastAPI routes and page rendering
+- `ui/main.py`: NiceGUI entrypoint
+- `ui/pages/`: NiceGUI pages
+- `ui/components/`: shared UI layout/components
+- `ui/styles/`: NiceGUI-specific CSS
 - `app/db.py`: SQLite setup and persistence helpers
 - `app/schemas.py`: dataclasses for roster search results
-- `app/services/lostark_bible.py`: external roster API integration
-- `templates/`: server-rendered HTML templates
-- `static/`: CSS
+- `app/services/`: backend service layer and LostArk Bible integration
+- `static/`: legacy static assets still available if needed
 - `docs/`: planning and roadmap documents
 
 ## Notes
