@@ -213,6 +213,70 @@ def create_raid_assignment(
         connection.commit()
 
 
+def swap_raid_assignment(
+    scheduled_raid_id: int, source_slot_order: int, target_slot_order: int
+):
+
+    with get_connection() as connection:
+        source_row = connection.execute(
+            """
+            SELECT id, character_id, slot_order
+            FROM scheduled_raid_assignments
+            WHERE scheduled_raid_id = ? AND slot_order = ?
+            """,
+            (
+                scheduled_raid_id,
+                source_slot_order,
+            ),
+        ).fetchone()
+        target_row = connection.execute(
+            """
+            SELECT id, character_id, slot_order
+            FROM scheduled_raid_assignments
+            WHERE scheduled_raid_id = ? AND slot_order = ?
+            """,
+            (
+                scheduled_raid_id,
+                target_slot_order,
+            ),
+        ).fetchone()
+        if source_slot_order == target_slot_order:
+            return
+        if source_row is None or target_row is None:
+            raise ValueError(
+                "Swap requires both source and target slots to be occupied."
+            )
+
+        source_id = int(source_row["id"])
+        target_id = int(target_row["id"])
+        connection.execute(
+            """
+            UPDATE scheduled_raid_assignments
+            SET slot_order = -1
+            WHERE id = ?
+            """,
+            (source_id,),
+        )
+        connection.execute(
+            """
+            UPDATE scheduled_raid_assignments
+            SET slot_order = ?
+            WHERE id = ?
+            """,
+            (source_slot_order, target_id),
+        )
+        connection.execute(
+            """
+            UPDATE scheduled_raid_assignments
+            SET slot_order = ?
+            WHERE id = ?
+            """,
+            (target_slot_order, source_id),
+        )
+
+        connection.commit()
+
+
 def create_scheduled_raid(
     week_id: int,
     raid_definition_id: int,
@@ -382,6 +446,19 @@ def delete_scheduled_raid(scheduled_raid_id: int):
             WHERE id = ?
             """,
             (scheduled_raid_id,),
+        )
+        connection.commit()
+
+
+def delete_assignment(assignment_id: int):
+
+    with get_connection() as connection:
+        connection.execute(
+            """
+            DELETE FROM scheduled_raid_assignments
+            WHERE id = ?
+            """,
+            (assignment_id,),
         )
         connection.commit()
 

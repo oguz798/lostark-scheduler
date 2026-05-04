@@ -1,10 +1,7 @@
 from nicegui import ui
 
 from app.services.members_service import (
-    prepare_member_refresh,
-    save_member_roster,
-    search_member_rosters,
-    prepare_refresh_roster,
+    refresh_member_record,
     get_members_page_data,
     create_member_record,
     create_character_record,
@@ -12,23 +9,33 @@ from app.services.members_service import (
     force_delete_character_record,
     update_member_character,
     refresh_character_record,
+    update_member_roster_main,
+    update_member_fields,
 )
 from ui.components.layout import app_shell
 
 
 async def refresh_member(member_id: int, ui_state):
 
-    region, roster_name = prepare_member_refresh(member_id)
     try:
-        results = await search_member_rosters(region, roster_name, "")
-        selected_roster = prepare_refresh_roster(results, roster_name)
+        await refresh_member_record(member_id)
+    except ValueError as exc:
+        ui.notify(str(exc), color="negative")
+        return
+    render_members.refresh(ui_state)
+    ui.notify("Member refreshed.", color="positive")
+
+
+def save_roster_main(member_id: int, selected_name, ui_state):
+    try:
+        update_member_roster_main(member_id, selected_name or "")
     except ValueError as exc:
         ui.notify(str(exc), color="negative")
         return
 
-    save_member_roster(member_id, selected_roster)
+    ui_state["main_picker_member_id"] = None
     render_members.refresh(ui_state)
-    ui.notify("Member refreshed.", color="positive")
+    ui.notify("Roster main character updated.", color="positive")
 
 
 def start_character_edit(character: dict, ui_state: dict) -> None:
@@ -74,7 +81,7 @@ async def refresh_character(member_id, character_id, ui_state):
         ui.notify(str(exc), color="negative")
 
 
-def render_member_header(member: dict, ui_state):
+def render_member_header(member: dict, characters_by_member, ui_state):
 
     is_pending_member_delete = ui_state["delete_member_id"] == member["id"]
 
@@ -92,7 +99,32 @@ def render_member_header(member: dict, ui_state):
                 roster_name = member.get("roster_name") or "-"
                 ui.html(f"<span class='chip'>{region}</span>")
                 ui.html(f"<span class='chip'>{world}</span>")
-                ui.html(f"<span class='chip gold'>{roster_name}</span>")
+
+                def open_main_picker(member_id: int, ui_state: dict):
+                    ui_state["main_picker_member_id"] = member_id
+                    render_members.refresh(ui_state)
+
+                if ui_state["main_picker_member_id"] == member["id"]:
+                    member_chars = characters_by_member.get(member["id"], [])
+                    options = [c["name"] for c in member_chars]
+
+                    roster_select = ui.select(options, value=roster_name).classes(
+                        "gold chip"
+                    )
+
+                    roster_select.on_value_change(
+                        lambda e, mid=member["id"]: save_roster_main(
+                            mid, e.value, ui_state
+                        )
+                    )
+                else:
+                    chip = ui.html(
+                        f"<span class='gold chip cursor-pointer'>{roster_name}</span>"
+                    )
+                    chip.on(
+                        "click",
+                        lambda _e, mid=member["id"]: open_main_picker(mid, ui_state),
+                    )
 
                 async def handle_refresh_click(_e, m=member["id"]):
                     await refresh_member(m, ui_state)
@@ -100,6 +132,10 @@ def render_member_header(member: dict, ui_state):
                 ui.button(
                     icon="refresh",
                     on_click=handle_refresh_click,
+                ).classes("app-icon-btn")
+                ui.button(
+                    icon="edit",
+                    on_click=lambda _e, m=member: start_member_edit(m, ui_state),
                 ).classes("app-icon-btn")
 
                 if not is_pending_member_delete:
@@ -121,24 +157,53 @@ def render_member_header(member: dict, ui_state):
                     ).classes("app-link-button")
 
 
-def render_member_meta(member: dict, latest_sync: str):
-    notes = (member.get("notes") or "").strip() or "No notes added yet."
+def render_member_meta(member: dict, latest_sync: str, ui_state: dict):
+    is_editing_member = ui_state["member_edit"]["member_id"] == member["id"]
     created_at = member.get("created_at_formatted") or "Not tracked"
 
     with ui.element("div").classes("app-panel-body"):
-        ui.html(f"<div>{notes}</div>")
-        ui.html(
-            f"<div class='app-muted'>Created: {created_at}    Last refresh: {latest_sync}</div>"
-        )
+        if not is_editing_member:
+            notes = (member.get("notes") or "").strip() or "No notes added yet."
+            ui.html(f"<div>{notes}</div>")
+            ui.html(f"<div class='app-muted'>Created: {created_at}</div>")
+            ui.html(f"<div class='app-muted'>Last refresh: {latest_sync}</div>")
+        else:
+            name_input = ui.input("Name", value=ui_state["member_edit"]["display_name"])
+            name_input.on_value_change(
+                lambda e: ui_state["member_edit"].__setitem__("display_name", e.value)
+            )
+
+            discord_input = ui.input(
+                "Discord Name",
+                value=ui_state["member_edit"]["discord_name"],
+            )
+            discord_input.on_value_change(
+                lambda e: ui_state["member_edit"].__setitem__("discord_name", e.value)
+            )
+
+            notes_input = ui.textarea("Notes", value=ui_state["member_edit"]["notes"])
+            notes_input.on_value_change(
+                lambda e: ui_state["member_edit"].__setitem__("notes", e.value)
+            )
+
+            with ui.row().classes("items-center gap-2"):
+                ui.button(
+                    icon="check",
+                    on_click=lambda _e: save_member_edit(ui_state),
+                ).classes("app-icon-btn")
+                ui.button(
+                    icon="close",
+                    on_click=lambda _e: cancel_member_edit(ui_state),
+                ).classes("app-icon-btn app-icon-btn-danger")
 
 
-def render_characters_section(member_id, ui_state):
+def render_characters_section(member_id, member_main_name, ui_state):
 
     with ui.element("div").classes("app-panel"):
         with ui.element("div").classes("app-panel-body"):
             is_open = member_id in ui_state["expanded_members"]
 
-            expansion = ui.expansion("Show details", value=is_open).classes(
+            expansion = ui.expansion("Show characters", value=is_open).classes(
                 "w-full block"
             )
 
@@ -152,10 +217,10 @@ def render_characters_section(member_id, ui_state):
             expansion.on_value_change(on_expand_change)
 
             with expansion:
-                render_member_characters(member_id, ui_state)
+                render_member_characters(member_id, member_main_name, ui_state)
 
 
-def render_member_characters(member_id, ui_state):
+def render_member_characters(member_id, member_main_name, ui_state):
 
     try:
         page_data = get_members_page_data()
@@ -167,12 +232,15 @@ def render_member_characters(member_id, ui_state):
         return
 
     characters = page_data["characters_by_member"].get(member_id, [])
-
     if not characters:
         ui.label("No characters imported yet.").classes("app-muted")
         return
 
     for character in characters:
+        is_main = (
+            character["name"].strip().lower()
+            == (member_main_name or "").strip().lower()
+        )
         item_level = character.get("item_level")
         item_level_text = (
             "-" if item_level is None else f"{item_level:.2f}".rstrip("0").rstrip(".")
@@ -199,7 +267,10 @@ def render_member_characters(member_id, ui_state):
                     )
                 ):
                     with ui.element("div").classes("character-col-main"):
-                        ui.html(f"<div><strong>{character['name']}</strong></div>")
+                        name_color = "#f2c86b" if is_main else "inherit"
+                        ui.html(
+                            f"<div><strong style='color:{name_color};'>{character['name']}</strong></div>"
+                        )
                         ui.html(
                             f"<div class='app-muted'>{character['class_name']}</div>"
                         )
@@ -325,12 +396,12 @@ def render_member_card(
     latest_sync = latest_sync_by_member.get(member["id"], "Not tracked")
     with ui.element("div").classes("app-panel member-card"):
         with ui.element("div").classes("app-panel-head"):
-            render_member_header(member, ui_state)
+            render_member_header(member, characters_by_member, ui_state)
 
-        render_member_meta(member, latest_sync)
+        render_member_meta(member, latest_sync, ui_state)
 
         with ui.element("div").classes("app-panel-body"):
-            render_characters_section(member["id"], ui_state)
+            render_characters_section(member["id"], member.get("roster_name"), ui_state)
 
 
 @ui.refreshable
@@ -374,12 +445,19 @@ def members_page():
             "role": "",
             "power": None,
         },
+        "member_edit": {
+            "member_id": None,
+            "display_name": "",
+            "discord_name": "",
+            "notes": "",
+        },
         "delete_member_id": None,
         "delete_character": {
             "member_id": None,
             "character_id": None,
         },
         "expanded_members": set(),
+        "main_picker_member_id": None,
     }
 
     with app_shell("Members", "Guild roster and imported character data"):
@@ -410,6 +488,41 @@ def members_page():
 
             with ui.element("div"):
                 render_members(ui_state)
+
+
+def start_member_edit(member: dict, ui_state: dict):
+    ui_state["member_edit"]["member_id"] = member["id"]
+    ui_state["member_edit"]["display_name"] = member.get("display_name") or ""
+    ui_state["member_edit"]["discord_name"] = member.get("discord_name") or ""
+    ui_state["member_edit"]["notes"] = member.get("notes") or ""
+    render_members.refresh(ui_state)
+
+
+def cancel_member_edit(ui_state: dict):
+    ui_state["member_edit"]["member_id"] = None
+    ui_state["member_edit"]["display_name"] = ""
+    ui_state["member_edit"]["discord_name"] = ""
+    ui_state["member_edit"]["notes"] = ""
+    render_members.refresh(ui_state)
+
+
+def save_member_edit(ui_state: dict):
+    mid = ui_state["member_edit"]["member_id"]
+    if mid is None:
+        return
+    try:
+        update_member_fields(
+            mid,
+            ui_state["member_edit"]["display_name"],
+            ui_state["member_edit"]["discord_name"],
+            ui_state["member_edit"]["notes"],
+        )
+    except ValueError as exc:
+        ui.notify(str(exc), color="negative")
+        return
+
+    cancel_member_edit(ui_state)
+    ui.notify("Member updated.", color="positive")
 
 
 def start_member_delete(member_id: int, ui_state: dict):

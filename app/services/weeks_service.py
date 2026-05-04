@@ -5,8 +5,10 @@ from app.db import (
     count_scheduled_raids_for_week,
     create_raid_assignment,
     create_scheduled_raid,
+    swap_raid_assignment,
     create_week,
     delete_scheduled_raid,
+    delete_assignment,
     delete_week,
     get_connection,
 )
@@ -238,6 +240,22 @@ def delete_scheduled_raid_record(scheduled_raid_id: int):
         raise ValueError("This scheduled raid has assignments and cannot be deleted.")
 
     delete_scheduled_raid(scheduled_raid_id)
+
+
+def delete_assignment_record(assignment_id):
+    delete_assignment(assignment_id)
+
+
+def swap_assignments_by_slot(scheduled_raid_id, source_slot, target_slot):
+
+    if int(source_slot) == int(target_slot):
+        return
+    try:
+        swap_raid_assignment( int(scheduled_raid_id),  int(source_slot),  int(target_slot))
+    except ValueError as exc:
+        raise ValueError(str(exc))
+    except Exception as exc:
+        raise ValueError(f"Failed to swap assignments: {exc}")
 
 
 def force_delete_scheduled_raid_record(scheduled_raid_id: int):

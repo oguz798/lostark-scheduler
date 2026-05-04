@@ -1,7 +1,7 @@
 from nicegui import ui
 
 from app.services.search_service import get_search_page_data, prepare_member_import
-from app.services.members_service import save_member_roster
+from app.db import save_imported_roster
 from ui.components.layout import app_shell
 
 
@@ -24,7 +24,7 @@ async def import_member_roster(member_id, region: str, name: str, roster_id: int
         ui.notify(str(exc), color="negative")
         return
 
-    save_member_roster(int(member_id.value), selected_roster)
+    save_imported_roster(int(member_id.value), selected_roster)
     ui.notify("Roster imported.", color="positive")
     ui.navigate.to("/members")
 
@@ -56,7 +56,9 @@ async def search_page(region: str, name: str):
         for result in results:
             with ui.element("div").classes("app-panel"):
                 with ui.element("div").classes("app-panel-head"):
-                    ui.html(f"<h2>{result.matched_character_name} · {result.matched_character_class}</h2>")
+                    ui.html(
+                        f"<h2>{result.matched_character_name} · {result.matched_character_class}</h2>"
+                    )
                     ui.html(
                         f"<div class='app-muted'>Characters: {result.total_characters}</div>"
                     )

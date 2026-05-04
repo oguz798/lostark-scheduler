@@ -1,7 +1,7 @@
 from nicegui import ui
 
 from ui.components.layout import app_shell
-from ui.pages import members, raids, weeks, week_detail, search
+from ui.pages import members, raids, weeks, week_detail, search, week_compact_preview
 
 
 @ui.page("/")
@@ -25,6 +25,10 @@ def index():
                         f"/search?region={region.value}&name={name.value}"
                     ),
                 ).classes("app-button-primary")
+                ui.button(
+                    "Compact Week Preview",
+                    on_click=lambda: ui.navigate.to("/compact-week-preview"),
+                ).classes("app-link-button")
 
 
 if __name__ in {"__main__", "__mp_main__"}:

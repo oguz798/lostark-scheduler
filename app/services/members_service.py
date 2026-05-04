@@ -158,45 +158,32 @@ def create_member_record(
         )
 
 
-def save_member_roster(member_id: int, roster_data: dict):
-    # Thin service wrapper kept for UI/service boundary consistency.
-    save_imported_roster(member_id, roster_data)
+def update_member_fields(
+    member_id: int,
+    display_name: str,
+    discord_name: str,
+    notes: str,
+):
+    clean_name = (display_name or "").strip()
+    if not clean_name:
+        raise ValueError("Member name is required.")
 
-
-def prepare_member_refresh(member_id: int) -> tuple[str, str]:
-    # Validate required refresh context and return normalized search inputs.
     with get_connection() as connection:
-        member_row = connection.execute(
-            "SELECT id, region, roster_name FROM members WHERE id = ?",
-            (member_id,),
-        ).fetchone()
-
-    if member_row is None:
-        raise ValueError("Member could not be found for refresh.")
-
-    member = dict(member_row)
-    region = (member.get("region") or "").strip()
-    roster_name = (member.get("roster_name") or "").strip()
-    if not region or not roster_name:
-        raise ValueError(
-            "This member needs a saved region and roster name before it can be refreshed."
+        _require_member_exists(connection, member_id)
+        connection.execute(
+            """
+            UPDATE members
+            SET display_name = ?, discord_name = ?, notes = ?
+            WHERE id = ?
+            """,
+            (
+                clean_name,
+                (discord_name or "").strip(),
+                (notes or "").strip(),
+                member_id,
+            ),
         )
-    return region, roster_name
-
-
-def prepare_refresh_roster(results: list, roster_name: str) -> dict:
-    # Prefer exact roster-name match; fall back to first candidate when no exact match exists.
-    if not results:
-        raise ValueError("No matching roster could be found for this member refresh.")
-    normalized_roster_name = roster_name.strip().casefold()
-
-    for result in results:
-        matched_name = (result.matched_character_name or "").strip().casefold()
-        if matched_name == normalized_roster_name:
-            return asdict(result)
-
-    return asdict(results[0])
-
+        connection.commit()
 
 async def create_character_record(member_id: int, character_name: str):
     with get_connection() as connection:
@@ -264,12 +251,54 @@ async def create_character_record(member_id: int, character_name: str):
         )
         connection.commit()
 
-async def refresh_character_record(member_id: int, character_id:int):
+
+async def refresh_member_record(member_id: int):
+
+    with get_connection() as connection:
+        member_row = connection.execute(
+            "SELECT * FROM members WHERE id = ?",
+            (member_id,),
+        ).fetchone()
+
+    if member_row is None:
+        raise ValueError("Member could not be found for refresh.")
+
+    member = dict(member_row)
+    region = (member.get("region") or "").strip()
+    roster_name = (member.get("roster_name") or "").strip()
+
+    if not region or not roster_name:
+        raise ValueError(
+            "This member needs a saved region and roster name before it can be refreshed."
+        )
+
+    results = await search_member_rosters(region, roster_name, "")
+
+    target = (roster_name or "").strip().casefold()
+    exact = [
+        r
+        for r in results
+        if (r.matched_character_name or "").strip().casefold() == target
+    ]
+    if exact:
+        selected = exact[0]
+    else:
+        selected = results[0]
+
+    selected_roster_dict = asdict(selected)
+
+    save_imported_roster(member_id, selected_roster_dict)
+
+
+async def refresh_character_record(member_id: int, character_id: int):
 
     with get_connection() as connection:
         character_row = connection.execute(
             "SELECT * FROM characters WHERE id= ? AND member_id = ?",
-            (character_id,member_id,),
+            (
+                character_id,
+                member_id,
+            ),
         ).fetchone()
         if character_row is None:
             raise ValueError("Character could not be found.")
@@ -286,7 +315,8 @@ async def refresh_character_record(member_id: int, character_id:int):
 
         target = (character_name or "").strip().casefold()
         exact = [
-            r for r in results
+            r
+            for r in results
             if (r.matched_character_name or "").strip().casefold() == target
         ]
         selected = exact[0] if exact else results[0]
@@ -326,7 +356,7 @@ async def refresh_character_record(member_id: int, character_id:int):
             ),
         )
         connection.commit()
-    
+
 
 def update_member_character(
     character_id: int, member_id: int, combat_role: str, combat_power_score
@@ -346,6 +376,21 @@ def update_member_character(
         connection.execute(query, tuple(params))
         connection.commit()
 
+def update_member_roster_main(member_id: int, roster_name: str):
+    with get_connection() as connection:
+        selected_name = (roster_name or "").strip()
+        if not selected_name:
+            raise ValueError("Select a character first.")
+        
+        connection.execute(
+            """
+            UPDATE members
+            SET roster_name = ?
+            WHERE id = ?
+            """,
+            (selected_name, member_id),
+        )
+        connection.commit()
 
 def force_delete_member_record(member_id: int):
     delete_member(member_id)

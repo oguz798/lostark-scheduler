@@ -36,7 +36,7 @@ CLASS_NAME_MAP = {
     "scrapper": "Scrapper",
     "shadowhunter": "Shadowhunter",
     "sharpshooter": "Sharpshooter",
-    "sorceress": "Sorceress",
+    "elemental_master": "Sorceress",
     "soul_master": "Soulfist",
     "soulfist": "Soulfist",
     "force_master": "Soulfist",
