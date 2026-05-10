@@ -1,8 +1,10 @@
 from nicegui import ui
-
+from app.db import init_db
 from ui.components.layout import app_shell
-from ui.pages import members, raids, weeks, week_detail, search, week_compact_preview
+from ui.pages import members, raids, search, weeks
+from ui.pages.week_plan import page
 
+init_db()
 
 @ui.page("/")
 def index():
@@ -25,11 +27,6 @@ def index():
                         f"/search?region={region.value}&name={name.value}"
                     ),
                 ).classes("app-button-primary")
-                ui.button(
-                    "Compact Week Preview",
-                    on_click=lambda: ui.navigate.to("/compact-week-preview"),
-                ).classes("app-link-button")
-
 
 if __name__ in {"__main__", "__mp_main__"}:
     ui.run(title="Lost Ark Scheduler")

@@ -1,0 +1,631 @@
+/* Week plan design tokens for quick tuning in one place. */
+:root {
+  --plan-gap: 10px;
+  --plan-gap-sm: clamp(4px, 0.4vw, 6px);
+  --plan-gap-xs: clamp(2px, 0.3vw, 4px);
+  --plan-pad-y: clamp(6px, 0.5vw, 10px);
+  --plan-pad-x: clamp(8px, 0.8vw, 12px);
+  --plan-slot-pad: clamp(2px, 0.35vw, 4px);
+  --plan-slot-min-h: clamp(30px, 2.8vw, 40px);
+  --plan-note-min-h: 32px;
+  --plan-item-min-h: 28px;
+  --plan-party-header-bg: #172033;
+  --plan-party-line: #2b3550;
+  --plan-group-line: #3b4f7a;
+  --plan-free-bg: #f2eebe;
+}
+
+/* Override base app container so this preview can use near full viewport width. */
+.app-page {
+  width: calc(100% - 24px) !important;
+  max-width: none !important;
+  margin: 12px auto 18px !important;
+}
+
+/* Root wrapper for week plan page content scale. */
+.app-week-plan-page {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  font-size: clamp(11px, 0.6vw + 8px, 14px);
+}
+
+.app-week-plan-layout {
+  display: block;
+  min-width: 0;
+  width: 100%;
+}
+
+.app-week-plan-main {
+  min-width: 0;
+}
+
+/* Top row: character pool + availability + schedule cards. */
+.app-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--plan-gap);
+  align-items: start;
+}
+
+/* Raids area spacing under top cards. */
+.app-raids-wrap {
+  margin-top: 8px;
+  padding: 0 6px;
+}
+
+/* Raid cards can sit side-by-side and wrap to next row. */
+.app-raids-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: var(--plan-gap);
+  width: 100%;
+}
+
+/* Panel paddings scoped only to week plan panels. */
+.app-plan-panel .app-panel-head {
+  padding: var(--plan-pad-y) var(--plan-pad-x);
+}
+
+.app-plan-panel .app-panel-body {
+  padding: var(--plan-pad-y) var(--plan-pad-x);
+  gap: clamp(4px, 0.5vw, 6px);
+  min-width: 0;
+}
+
+/* Raid cards size to content instead of always stretching full width. */
+.app-raid-shell {
+  display: block !important;
+  width: 100% !important;
+  max-width: 100%;
+  margin: 0;
+}
+
+.app-raid-shell-open {
+  display: block !important;
+  width: 100% !important;
+  max-width: 100%;
+}
+
+.app-raid-expansion {
+  width: 100%;
+}
+
+/* Tighten NiceGUI expansion internals for denser layout. */
+.app-raid-shell .q-expansion-item__content {
+  padding: 6px 10px 8px !important;
+}
+
+.app-raid-shell .q-expansion-item,
+.app-raid-shell .q-expansion-item__container,
+.app-raid-shell .q-expansion-item__content {
+  width: 100%;
+  max-width: 100%;
+}
+
+.app-raid-shell .q-item {
+  min-height: var(--plan-item-min-h) !important;
+  padding: 4px 8px !important;
+}
+
+/* Notes row spacing and input height. */
+.app-raid-note,
+.app-group-note {
+  margin-bottom: 4px;
+}
+
+.app-raid-note .q-field__control,
+.app-group-note .q-field__control {
+  min-height: var(--plan-note-min-h) !important;
+}
+
+/* Group columns inside each raid card. */
+.app-group-grid {
+  display: grid;
+  gap: var(--plan-gap-sm);
+  width: fit-content;
+  max-width: 100%;
+  align-items: stretch;
+}
+
+/* Group card visual separation. */
+.app-group-shell {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: 100%;
+  border-color: var(--plan-group-line);
+}
+
+.app-group-shell-single {
+  width: 220px;
+}
+
+.app-group-shell-double {
+  width: 286px;
+}
+
+.app-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 3px 6px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  border-bottom: 1px solid var(--plan-group-line);
+}
+
+.app-group-content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.app-group-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: auto;
+}
+
+.app-group-schedule {
+  display: grid !important;
+  grid-template-columns: 72px 84px 58px 28px 28px;
+  gap: 6px;
+  align-items: start;
+  width: max-content;
+  max-width: 100%;
+}
+
+.app-group-schedule .q-field {
+  min-width: 0;
+}
+
+/* Party columns and slot tables. */
+.app-party-grid {
+  display: grid;
+  align-content: start;
+  gap: var(--plan-gap-xs);
+  width: 100%;
+}
+
+.app-party-col {
+  border: 1px solid var(--plan-party-line);
+}
+
+.app-party-head {
+  padding: var(--plan-slot-pad);
+  border-bottom: 1px solid var(--plan-party-line);
+  font-weight: 700;
+  text-align: center;
+  background: var(--plan-party-header-bg);
+}
+
+.app-slot {
+  position: relative;
+  padding: var(--plan-slot-pad);
+  border-top: 1px solid var(--plan-party-line);
+  min-height: var(--plan-slot-min-h);
+}
+
+.app-slot-required-label {
+  display: inline-flex;
+  width: max-content;
+  margin-bottom: 3px;
+  padding: 1px 6px;
+  border: 1px solid var(--plan-party-line);
+  border-radius: 999px;
+  font-size: 0.65rem;
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: 0.04em;
+}
+
+.app-slot-required-dps .app-slot-required-label {
+  color: #fecaca;
+  border-color: rgba(248, 113, 113, 0.45);
+  background: rgba(127, 29, 29, 0.18);
+}
+
+.app-slot-required-sup {
+  box-shadow: inset 3px 0 0 rgba(250, 204, 21, 0.65);
+}
+
+.app-slot-required-sup .app-slot-required-label {
+  color: #fde68a;
+  border-color: rgba(250, 204, 21, 0.55);
+  background: rgba(113, 63, 18, 0.26);
+}
+
+.app-slot-member {
+  overflow: hidden;
+  color: var(--muted);
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.app-slot-class {
+  overflow: hidden;
+  color: #dbeafe;
+  font-weight: 700;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-slot-main-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* Free-spots summary strip under each group. */
+.app-free-row {
+  margin-top: 4px;
+  padding: 3px 6px;
+  background: var(--plan-free-bg);
+  color: #111;
+}
+
+/* Availability card table grid. */
+.app-availability-scroll {
+  overflow-x: auto;
+}
+
+.app-availability-grid {
+  display: grid;
+  grid-template-columns: 1.15fr repeat(5, 1fr);
+  gap: 0;
+  min-width: 760px;
+}
+
+
+.app-availability-cell {
+  border: 1px solid var(--line);
+  padding: 5px 7px;
+}
+
+.app-availability-head {
+  font-weight: 700;
+  background: var(--plan-party-header-bg);
+}
+.app-availability-read-button {
+  width: 100%;
+  min-height: 24px;
+  padding: 0 4px;
+  justify-content: flex-start;
+  font-size: inherit;
+  color: inherit;
+}
+
+.app-availability-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 24px 24px;
+  gap: 4px;
+  align-items: start;
+}
+
+.app-availability-status {
+  min-width: 0;
+}
+
+.app-availability-time {
+  grid-column: 1 / -1;
+}
+
+.app-availability-editor .app-icon-btn {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  padding: 0;
+}
+
+
+/* Schedule card table grid. */
+.app-schedule-grid {
+  display: grid;
+  grid-template-columns: 0.9fr 1fr 1fr 1.2fr;
+  gap: 0;
+  min-width: 560px;
+}
+
+.app-schedule-cell {
+  border: 1px solid var(--line);
+  padding: 5px 7px;
+}
+
+.app-schedule-head {
+  font-weight: 700;
+  background: var(--plan-party-header-bg);
+}
+
+.app-raid-body-grid {
+  display: grid;
+  gap: 10px;
+  align-items: start;
+  margin-top: 8px;
+  min-width: 0;
+}
+
+.app-raid-body-grid-open {
+  grid-template-columns: clamp(340px, 22vw, 410px) minmax(0, 1fr);
+  width: 100%;
+  max-width: 100%;
+}
+
+.app-raid-body-grid-closed {
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+  max-width: 100%;
+}
+
+.app-raid-body-left,
+.app-raid-body-right {
+  min-width: 0;
+}
+
+.app-raid-body-right {
+  overflow-x: auto;
+  padding-bottom: 4px;
+  width: 100%;
+  max-width: 100%;
+}
+
+.app-raid-body-grid-open .app-raid-body-right {
+  max-width: min(100%, calc(100vw - 460px));
+}
+
+.app-raid-body-grid-closed .app-raid-body-right {
+  max-width: 100%;
+}
+
+.app-raid-body-right .app-group-grid {
+  width: max-content;
+  max-width: none;
+}
+
+.app-assignment-sidebar {
+  width: 100%;
+  max-height: min(58vh, 620px);
+  overflow: hidden;
+  margin: 0;
+  border-color: var(--plan-group-line);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.03);
+}
+
+.app-assignment-sidebar .app-panel-head {
+  padding: 8px 10px;
+}
+
+.app-assignment-sidebar .app-panel-head h2 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.app-assignment-sidebar .app-panel-body {
+  max-height: min(50vh, 540px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 6px 8px 10px;
+  gap: 4px;
+}
+
+.app-assignment-sidebar .q-expansion-item {
+  border-bottom: 1px solid rgb(255 255 255 / 0.04);
+}
+
+.app-assignment-sidebar .q-expansion-item__content {
+  padding: 2px 0 8px !important;
+}
+
+.app-assignment-sidebar .q-item {
+  min-height: 32px !important;
+  padding: 4px 8px !important;
+}
+
+.app-assignment-member-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  align-items: start;
+}
+
+.app-assignment-member-grid > .q-expansion-item {
+  min-width: 0;
+  border: 1px solid rgba(120, 150, 220, 0.18);
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(10, 18, 34, 0.22);
+}
+
+.app-assignment-character-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+  min-width: 0;
+  padding: 4px 6px 8px;
+}
+
+.app-assignment-character-pill {
+  display: block;
+  min-width: 0;
+  max-width: none;
+  min-height: 44px;
+  padding: 6px 7px;
+  border: 1px solid var(--plan-party-line);
+  border-radius: 8px;
+  background: #111827;
+  cursor: grab;
+}
+
+.app-assignment-character-pill-content {
+  display: grid;
+  grid-template-areas:
+    "class class"
+    "ilvl role";
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 3px 6px;
+  min-width: 0;
+}
+
+.app-assignment-character-pill:hover {
+  border-color: var(--plan-group-line);
+  background: #151f32;
+}
+
+.app-assignment-character-pill:active {
+  cursor: grabbing;
+}
+
+.app-assignment-character-pill-assigned {
+  opacity: 0.62;
+  border-style: dashed;
+}
+
+
+.app-assignment-character-name {
+  overflow: hidden;
+  min-width: 0;
+  font-weight: 700;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-assignment-character-class {
+  grid-area: class;
+  overflow: hidden;
+  color: #dbeafe;
+  font-weight: 600;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-assignment-character-ilvl {
+  grid-area: ilvl;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.2;
+}
+
+.app-assignment-character-role {
+  grid-area: role;
+  flex: 0 0 auto;
+  width: max-content;
+  padding: 1px 6px;
+  border: 1px solid var(--plan-party-line);
+  border-radius: 999px;
+  color: #dbeafe;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.app-assignment-character-role.app-slot-role--dps {
+  color: #fecaca;
+  border-color: rgba(248, 113, 113, 0.45);
+  background: rgba(127, 29, 29, 0.24);
+}
+
+.app-assignment-character-role.app-slot-role--sup {
+  color: #fde68a;
+  border-color: rgba(250, 204, 21, 0.45);
+  background: rgba(113, 63, 18, 0.24);
+}
+
+.app-assignment-empty {
+  padding: 10px;
+  border: 1px dashed var(--plan-party-line);
+  border-radius: 10px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.app-slot-assignment {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 4px;
+  cursor: grab;
+}
+
+.app-slot-assignment:active {
+  cursor: grabbing;
+}
+
+.app-slot-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.app-slot-assignment .app-icon-btn {
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.app-slot-tooltip {
+  max-width: 260px;
+  white-space: normal;
+  line-height: 1.35;
+  font-size: 12px;
+}
+
+
+.app-assignment-filters {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) 86px;
+  align-items: end;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin-bottom: 10px;
+  padding: 6px;
+  border: 1px solid rgba(120, 150, 220, 0.25);
+  border-radius: 10px;
+  background: rgba(10, 18, 34, 0.45);
+}
+
+.app-assignment-filters .q-checkbox {
+  grid-column: 1 / -1;
+  padding-top: 0 !important;
+}
+
+@media (max-width: 1100px) {
+  .app-raid-body-grid-open {
+    grid-template-columns: 1fr;
+  }
+
+  .app-assignment-member-grid {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  }
+}
+
+
+/* Responsive collapse of top 3 cards on narrower screens. */
+@media (max-width: 1400px) {
+  .app-top {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 1000px) {
+  .app-top {
+    grid-template-columns: 1fr;
+  }
+}
+

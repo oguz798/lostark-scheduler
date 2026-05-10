@@ -1,7 +1,10 @@
 from nicegui import ui
 
-from app.services.search_service import get_search_page_data, prepare_member_import
-from app.db import save_imported_roster
+from app.services.search_service import (
+    get_search_page_data,
+    prepare_member_import,
+    save_selected_roster,
+)
 from ui.components.layout import app_shell
 
 
@@ -24,7 +27,7 @@ async def import_member_roster(member_id, region: str, name: str, roster_id: int
         ui.notify(str(exc), color="negative")
         return
 
-    save_imported_roster(int(member_id.value), selected_roster)
+    save_selected_roster(int(member_id.value), selected_roster)
     ui.notify("Roster imported.", color="positive")
     ui.navigate.to("/members")
 

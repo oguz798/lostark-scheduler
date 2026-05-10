@@ -5,7 +5,7 @@ from typing import Any
 
 import httpx
 
-from app.schemas import TopCharacter, RosterSearchResult
+from app.schemas.lostark import TopCharacter, RosterSearchResult
 
 SITE_URL = "https://lostark.bible"
 API_URL = "https://lostark.bible/api/link/search"
@@ -19,6 +19,7 @@ CLASS_NAME_MAP = {
     "battle_master": "Wardancer",
     "bard": "Bard",
     "berserker": "Berserker",
+    "berserker_female": "Slayer",
     "blaster": "Artillerist",
     "deathblade": "Deathblade",
     "demonic": "Shadowhunter",

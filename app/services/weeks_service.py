@@ -1,13 +1,15 @@
 from datetime import date, timedelta
 
 from app.db import (
-    count_assignments_for_scheduled_raid,
-    count_scheduled_raids_for_week,
+    count_assignments_for_raid_group,
+    count_raid_groups_for_week,
     create_raid_assignment,
-    create_scheduled_raid,
+    create_raid_group,
+    update_raid_group_schedule,
+    move_raid_assignment,
     swap_raid_assignment,
     create_week,
-    delete_scheduled_raid,
+    delete_raid_group,
     delete_assignment,
     delete_week,
     get_connection,
@@ -16,8 +18,8 @@ from app.db import (
 WEEK_NOT_FOUND_MESSAGE = "No week found."
 WEEK_CREATE_SUCCESS_MESSAGE = "Week creation successful"
 WEEK_CREATE_FAILURE_MESSAGE = "Week creation failed"
-SCHEDULED_RAID_CREATE_SUCCESS_MESSAGE = "Scheduled raid creation successful"
-SCHEDULED_RAID_CREATE_FAILURE_MESSAGE = "Scheduled raid creation failed"
+RAID_GROUP_CREATE_SUCCESS_MESSAGE = "Raid group creation successful"
+RAID_GROUP_CREATE_FAILURE_MESSAGE = "Raid group creation failed"
 ASSIGNMENT_SUCCESS_MESSAGE = "Assignment successful"
 ASSIGNMENT_FAILURE_MESSAGE = "Assignment failed"
 
@@ -50,28 +52,6 @@ def create_week_record(start_date: str, notes: str):
     create_week(start_date, notes)
 
 
-def _group_scheduled_raids_by_day(scheduled_raids: list[dict]) -> list[dict]:
-    # Converts a flat raid list into day buckets so the UI can render sectioned blocks.
-    day_groups = []
-    current_day = None
-    current_raids = []
-
-    for raid in scheduled_raids:
-        raid_day = raid.get("day")
-        if raid_day != current_day:
-            if current_day is not None:
-                day_groups.append({"day": current_day, "raids": current_raids})
-            current_day = raid_day
-            current_raids = [raid]
-        else:
-            current_raids.append(raid)
-
-    if current_day is not None:
-        day_groups.append({"day": current_day, "raids": current_raids})
-
-    return day_groups
-
-
 def _fetch_week_row(connection, week_id: int):
     week_row = connection.execute(
         "SELECT * FROM weeks WHERE id = ?",
@@ -82,31 +62,32 @@ def _fetch_week_row(connection, week_id: int):
     return week_row
 
 
-def _fetch_raid_definition_rows(connection):
+def _fetch_raid_rows(connection):
     return connection.execute(
-        "SELECT * FROM raid_definitions ORDER BY min_item_level DESC"
+        "SELECT * FROM raids ORDER BY min_item_level DESC"
     ).fetchall()
 
 
-def _fetch_scheduled_rows(connection, week_id: int):
+def _fetch_raid_group_rows(connection, week_id: int):
     return connection.execute(
         """SELECT
-            scheduled_raids.id,
-            scheduled_raids.week_id,
-            scheduled_raids.raid_definition_id,
-            scheduled_raids.day,
-            scheduled_raids.group_number,
-            scheduled_raids.start_time,
-            scheduled_raids.notes,
-            scheduled_raids.sort_order,
-            raid_definitions.title AS raid_title,
-            raid_definitions.difficulty AS raid_difficulty,
-            raid_definitions.player_count AS player_count
-        FROM scheduled_raids
-        JOIN raid_definitions
-            ON scheduled_raids.raid_definition_id = raid_definitions.id
-        WHERE scheduled_raids.week_id = ?
-        ORDER BY CASE scheduled_raids.day
+            raid_groups.id,
+            raid_groups.week_id,
+            raid_groups.raid_id,
+            raid_groups.day,
+            raid_groups.group_number,
+            raid_groups.start_time,
+            raid_groups.notes,
+            raid_groups.sort_order,
+            raids.title AS raid_title,
+            raids.difficulty AS raid_difficulty,
+            raids.player_count AS player_count,
+            raids.min_item_level AS min_item_level
+        FROM raid_groups
+        JOIN raids
+            ON raid_groups.raid_id = raids.id
+        WHERE raid_groups.week_id = ?
+        ORDER BY CASE raid_groups.day
             WHEN "Wed" THEN 1
             WHEN "Thu" THEN 2
             WHEN "Fri" THEN 3
@@ -114,7 +95,7 @@ def _fetch_scheduled_rows(connection, week_id: int):
             WHEN "Sun" THEN 5
             ELSE 99
         END ASC,
-        scheduled_raids.sort_order ASC""",
+        raid_groups.sort_order ASC""",
         (week_id,),
     ).fetchall()
 
@@ -136,26 +117,30 @@ def _fetch_assignment_rows(connection, week_id: int):
     return connection.execute(
         """
         SELECT
-            scheduled_raid_assignments.id,
-            scheduled_raid_assignments.scheduled_raid_id,
-            scheduled_raid_assignments.character_id,
-            scheduled_raid_assignments.slot_order,
-            scheduled_raid_assignments.notes,
+            raid_assignments.id,
+            raid_assignments.raid_group_id,
+            raid_assignments.character_id,
+            raid_assignments.slot_order,
+            raid_assignments.notes,
             characters.name AS character_name,
             characters.class_name,
             characters.item_level,
             characters.combat_role,
-            characters.combat_power_score
-        FROM scheduled_raid_assignments
+            characters.combat_power_score,
+            members.id AS member_id,
+            members.display_name AS member_name
+        FROM raid_assignments
         JOIN characters
-            ON scheduled_raid_assignments.character_id = characters.id
-        WHERE scheduled_raid_assignments.scheduled_raid_id IN (
+            ON raid_assignments.character_id = characters.id
+        JOIN members
+            ON characters.member_id = members.id
+        WHERE raid_assignments.raid_group_id IN (
             SELECT id
-            FROM scheduled_raids
+            FROM raid_groups
             WHERE week_id = ?
         )
-        ORDER BY scheduled_raid_assignments.scheduled_raid_id ASC,
-                    scheduled_raid_assignments.slot_order ASC
+        ORDER BY raid_assignments.raid_group_id ASC,
+                    raid_assignments.slot_order ASC
         """,
         (week_id,),
     ).fetchall()
@@ -165,39 +150,38 @@ def get_week_detail_page_data(week_id: int) -> dict:
     # Single read model for week detail: pulls week, raids, active characters, and assignments.
     with get_connection() as connection:
         week_row = _fetch_week_row(connection, week_id)
-        raid_def_rows = _fetch_raid_definition_rows(connection)
-        scheduled_rows = _fetch_scheduled_rows(connection, week_id)
+        raid_rows = _fetch_raid_rows(connection)
+        raid_group_rows = _fetch_raid_group_rows(connection, week_id)
         character_rows = _fetch_character_rows(connection)
         assignments_rows = _fetch_assignment_rows(connection, week_id)
 
     week = dict(week_row)
-    raid_definitions = [dict(row) for row in raid_def_rows]
-    scheduled_raids = [dict(row) for row in scheduled_rows]
+    raids = [dict(row) for row in raid_rows]
+    raid_groups = [dict(row) for row in raid_group_rows]
     characters = [dict(row) for row in character_rows]
-    scheduled_raid_assignments = [dict(row) for row in assignments_rows]
+    raid_assignments = [dict(row) for row in assignments_rows]
 
     return {
         "week": week,
-        "raid_definitions": raid_definitions,
-        "scheduled_raids": scheduled_raids,
-        "day_groups": _group_scheduled_raids_by_day(scheduled_raids),
+        "raids": raids,
+        "raid_groups": raid_groups,
         "characters": characters,
-        "scheduled_raid_assignments": scheduled_raid_assignments,
+        "raid_assignments": raid_assignments,
     }
 
 
-def create_scheduled_raid_record(
+def create_raid_group_record(
     week_id: int,
-    raid_definition_id: int,
+    raid_id: int,
     day: str,
     group_number: int,
     start_time: str | None,
     notes: str,
     sort_order: int,
 ):
-    create_scheduled_raid(
+    create_raid_group(
         week_id,
-        raid_definition_id,
+        raid_id,
         day,
         group_number,
         start_time,
@@ -206,27 +190,51 @@ def create_scheduled_raid_record(
     )
 
 
+def update_raid_group_schedule_record(
+    raid_group_id: int,
+    day: str,
+    start_time: str | None,
+    sort_order: int,
+):
+    normalized_day = (day or "").strip()
+    normalized_time = (start_time or "").strip() or None
+    normalized_sort_order = int(sort_order or 0)
+
+    if not normalized_day:
+        raise ValueError("Day is required.")
+
+    if normalized_sort_order < 0:
+        raise ValueError("Sort order cannot be negative.")
+
+    update_raid_group_schedule(
+        raid_group_id,
+        normalized_day,
+        normalized_time,
+        normalized_sort_order,
+    )
+
+
 def create_assignment_record(
-    scheduled_raid_id: int,
+    raid_group_id: int,
     character_id: int,
     slot_order: int,
     notes: str,
 ):
-    create_raid_assignment(scheduled_raid_id, character_id, slot_order, notes)
+    create_raid_assignment(raid_group_id, character_id, slot_order, notes)
 
 
-def get_scheduled_raid_assignment_count(scheduled_raid_id: int) -> int:
-    return count_assignments_for_scheduled_raid(scheduled_raid_id)
+def get_raid_group_assignment_count(raid_group_id: int) -> int:
+    return count_assignments_for_raid_group(raid_group_id)
 
 
-def get_week_scheduled_raid_count(week_id: int) -> int:
-    return count_scheduled_raids_for_week(week_id)
+def get_week_raid_group_count(week_id: int) -> int:
+    return count_raid_groups_for_week(week_id)
 
 
 def delete_week_record(week_id: int):
-    # Guard against deleting a week that still has dependent scheduled raids.
-    if count_scheduled_raids_for_week(week_id) > 0:
-        raise ValueError("This week has scheduled raids and cannot be deleted.")
+    # Guard against deleting a week that still has dependent raid groups.
+    if count_raid_groups_for_week(week_id) > 0:
+        raise ValueError("This week has raid groups and cannot be deleted.")
 
     delete_week(week_id)
 
@@ -235,28 +243,44 @@ def force_delete_week_record(week_id: int):
     delete_week(week_id)
 
 
-def delete_scheduled_raid_record(scheduled_raid_id: int):
-    if count_assignments_for_scheduled_raid(scheduled_raid_id) > 0:
-        raise ValueError("This scheduled raid has assignments and cannot be deleted.")
+def delete_raid_group_record(raid_group_id: int):
+    if count_assignments_for_raid_group(raid_group_id) > 0:
+        raise ValueError("This group has assignments and cannot be deleted.")
 
-    delete_scheduled_raid(scheduled_raid_id)
+    delete_raid_group(raid_group_id)
 
 
 def delete_assignment_record(assignment_id):
     delete_assignment(assignment_id)
 
 
-def swap_assignments_by_slot(scheduled_raid_id, source_slot, target_slot):
-
-    if int(source_slot) == int(target_slot):
-        return
+def move_assignment_to_slot(
+    assignment_id: int,
+    target_raid_group_id: int,
+    target_slot_order: int,
+):
     try:
-        swap_raid_assignment( int(scheduled_raid_id),  int(source_slot),  int(target_slot))
+        move_raid_assignment(
+            int(assignment_id), int(target_raid_group_id), int(target_slot_order)
+        )
+    except ValueError as exc:
+        raise ValueError(str(exc))
+    except Exception as exc:
+        raise ValueError(f"Failed to move assignment: {exc}")
+
+
+def swap_assignments_by_slot(
+    source_assignment_id: int,
+    target_assignment_id: int,
+):
+
+    try:
+        swap_raid_assignment(int(source_assignment_id), int(target_assignment_id))
     except ValueError as exc:
         raise ValueError(str(exc))
     except Exception as exc:
         raise ValueError(f"Failed to swap assignments: {exc}")
 
 
-def force_delete_scheduled_raid_record(scheduled_raid_id: int):
-    delete_scheduled_raid(scheduled_raid_id)
+def force_delete_raid_group_record(raid_group_id: int):
+    delete_raid_group(raid_group_id)

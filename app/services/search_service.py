@@ -2,7 +2,7 @@ from dataclasses import asdict
 
 import httpx
 
-from app.db import get_connection
+from app.db import get_connection,save_imported_roster
 from app.services.lostark_bible import search_rosters
 
 IMPORT_ROSTER_SERVICE_UNAVAILABLE = (
@@ -46,6 +46,9 @@ async def prepare_member_import(region: str, name: str, roster_id: int) -> dict:
         )
 
     return selected_roster
+
+def save_selected_roster(member_id: int, roster_data: dict) -> None:
+    save_imported_roster(member_id, roster_data)
 
 
 def get_search_members() -> list[dict]:

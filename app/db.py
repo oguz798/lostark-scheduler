@@ -57,7 +57,7 @@ def init_db():
         )
         connection.execute(
             """
-            CREATE TABLE IF NOT EXISTS raid_definitions (
+            CREATE TABLE IF NOT EXISTS raids (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 title TEXT NOT NULL,
                 difficulty TEXT NOT NULL,
@@ -78,30 +78,48 @@ def init_db():
         )
         connection.execute(
             """
-            CREATE TABLE IF NOT EXISTS scheduled_raids (
+            CREATE TABLE IF NOT EXISTS raid_groups (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 week_id INTEGER NOT NULL,
-                raid_definition_id INTEGER NOT NULL,
+                raid_id INTEGER NOT NULL,
                 day TEXT NOT NULL,
                 group_number INTEGER NOT NULL,
                 start_time TEXT,
                 notes TEXT DEFAULT '',
                 sort_order INTEGER NOT NULL,
                 FOREIGN KEY (week_id) REFERENCES weeks(id),
-                FOREIGN KEY (raid_definition_id) REFERENCES raid_definitions(id)
+                FOREIGN KEY (raid_id) REFERENCES raids(id)
             )
             """
         )
         connection.execute(
             """
-            CREATE TABLE IF NOT EXISTS scheduled_raid_assignments (
+            CREATE TABLE IF NOT EXISTS raid_assignments (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                scheduled_raid_id INTEGER NOT NULL,
+                raid_group_id INTEGER NOT NULL,
                 character_id INTEGER NOT NULL,
                 slot_order INTEGER NOT NULL,
                 notes TEXT DEFAULT '',
-                FOREIGN KEY (scheduled_raid_id) REFERENCES scheduled_raids(id),
+                FOREIGN KEY (raid_group_id) REFERENCES raid_groups(id),
                 FOREIGN KEY (character_id) REFERENCES characters(id)
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS week_member_availability (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                week_id INTEGER NOT NULL,
+                member_id INTEGER NOT NULL,
+                day TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'available',
+                available_after TEXT,
+                notes TEXT DEFAULT '',
+                created_at TEXT,
+                updated_at TEXT,
+                UNIQUE (week_id, member_id, day),
+                FOREIGN KEY (week_id) REFERENCES weeks(id),
+                FOREIGN KEY (member_id) REFERENCES members(id)
             )
             """
         )
@@ -187,7 +205,7 @@ def create_week(start_date: str, notes: str):
 
 
 def create_raid_assignment(
-    scheduled_raid_id: int,
+    raid_group_id: int,
     character_id: int,
     slot_order: int,
     notes: str | None,
@@ -195,8 +213,8 @@ def create_raid_assignment(
     with get_connection() as connection:
         connection.execute(
             """
-            INSERT INTO scheduled_raid_assignments (
-                scheduled_raid_id,
+            INSERT INTO raid_assignments (
+                raid_group_id,
                 character_id,
                 slot_order,
                 notes
@@ -204,7 +222,7 @@ def create_raid_assignment(
             VALUES (?, ?, ?, ?)
             """,
             (
-                scheduled_raid_id,
+                raid_group_id,
                 character_id,
                 slot_order,
                 notes,
@@ -213,73 +231,110 @@ def create_raid_assignment(
         connection.commit()
 
 
-def swap_raid_assignment(
-    scheduled_raid_id: int, source_slot_order: int, target_slot_order: int
+def move_raid_assignment(
+    assignment_id: int, target_raid_group_id: int, target_slot_order: int
 ):
-
     with get_connection() as connection:
         source_row = connection.execute(
             """
-            SELECT id, character_id, slot_order
-            FROM scheduled_raid_assignments
-            WHERE scheduled_raid_id = ? AND slot_order = ?
+            SELECT id
+            FROM raid_assignments
+            WHERE id = ? 
             """,
-            (
-                scheduled_raid_id,
-                source_slot_order,
-            ),
+            (assignment_id,),
         ).fetchone()
+
+        if source_row is None:
+            raise ValueError("Assignment could not be found.")
+
         target_row = connection.execute(
             """
-            SELECT id, character_id, slot_order
-            FROM scheduled_raid_assignments
-            WHERE scheduled_raid_id = ? AND slot_order = ?
+            SELECT id
+            FROM raid_assignments
+            WHERE raid_group_id = ? AND slot_order = ?
+            """,
+            (target_raid_group_id, target_slot_order),
+        ).fetchone()
+
+        if target_row is not None:
+            raise ValueError("Target slot is occupied.")
+
+        connection.execute(
+            """
+            UPDATE raid_assignments
+            SET raid_group_id = ?, slot_order = ?
+            WHERE id = ?
             """,
             (
-                scheduled_raid_id,
+                target_raid_group_id,
                 target_slot_order,
+                assignment_id,
             ),
-        ).fetchone()
-        if source_slot_order == target_slot_order:
-            return
-        if source_row is None or target_row is None:
-            raise ValueError(
-                "Swap requires both source and target slots to be occupied."
-            )
-
-        source_id = int(source_row["id"])
-        target_id = int(target_row["id"])
-        connection.execute(
-            """
-            UPDATE scheduled_raid_assignments
-            SET slot_order = -1
-            WHERE id = ?
-            """,
-            (source_id,),
-        )
-        connection.execute(
-            """
-            UPDATE scheduled_raid_assignments
-            SET slot_order = ?
-            WHERE id = ?
-            """,
-            (source_slot_order, target_id),
-        )
-        connection.execute(
-            """
-            UPDATE scheduled_raid_assignments
-            SET slot_order = ?
-            WHERE id = ?
-            """,
-            (target_slot_order, source_id),
         )
 
         connection.commit()
 
 
-def create_scheduled_raid(
+def swap_raid_assignment(source_assignment_id: int, target_assignment_id: int):
+
+    with get_connection() as connection:
+        source_row = connection.execute(
+            """
+            SELECT id, raid_group_id, slot_order
+            FROM raid_assignments
+            WHERE id = ?
+            """,
+            (source_assignment_id,),
+        ).fetchone()
+        target_row = connection.execute(
+            """
+            SELECT id, raid_group_id, slot_order
+            FROM raid_assignments
+            WHERE id = ?
+            """,
+            (target_assignment_id,),
+        ).fetchone()
+
+        if source_row is None or target_row is None:
+            raise ValueError("Swap requires both assignments to exist.")
+
+        source_raid_group_id = int(source_row["raid_group_id"])
+        source_slot_order = int(source_row["slot_order"])
+
+        target_raid_group_id = int(target_row["raid_group_id"])
+        target_slot_order = int(target_row["slot_order"])
+
+        connection.execute(
+            """
+            UPDATE raid_assignments
+            SET slot_order = -1
+            WHERE id = ?
+            """,
+            (source_assignment_id,),
+        )
+        connection.execute(
+            """
+            UPDATE raid_assignments
+            SET raid_group_id= ?, slot_order = ?
+            WHERE id = ?
+            """,
+            (source_raid_group_id, source_slot_order, target_assignment_id),
+        )
+        connection.execute(
+            """
+            UPDATE raid_assignments
+            SET raid_group_id= ?,slot_order = ?
+            WHERE id = ?
+            """,
+            (target_raid_group_id, target_slot_order, source_assignment_id),
+        )
+
+        connection.commit()
+
+
+def create_raid_group(
     week_id: int,
-    raid_definition_id: int,
+    raid_id: int,
     day: str,
     group_number: int,
     start_time: str | None,
@@ -289,9 +344,9 @@ def create_scheduled_raid(
     with get_connection() as connection:
         connection.execute(
             """
-            INSERT INTO scheduled_raids (
+            INSERT INTO raid_groups (
                 week_id,
-                raid_definition_id,
+                raid_id,
                 day,
                 group_number,
                 start_time,
@@ -302,7 +357,7 @@ def create_scheduled_raid(
             """,
             (
                 week_id,
-                raid_definition_id,
+                raid_id,
                 day,
                 group_number,
                 start_time,
@@ -313,7 +368,30 @@ def create_scheduled_raid(
         connection.commit()
 
 
-def create_raid_definition(
+def update_raid_group_schedule(
+    raid_group_id: int,
+    day: str,
+    start_time: str | None,
+    sort_order: int,
+):
+    with get_connection() as connection:
+        connection.execute(
+            """
+            UPDATE raid_groups
+            SET day = ?, start_time = ?, sort_order = ?
+            WHERE id = ?
+            """,
+            (
+                day,
+                start_time,
+                sort_order,
+                raid_group_id,
+            ),
+        )
+        connection.commit()
+
+
+def create_raid(
     title: str,
     difficulty: str,
     player_count: int,
@@ -323,7 +401,7 @@ def create_raid_definition(
     with get_connection() as connection:
         connection.execute(
             """
-            INSERT INTO raid_definitions (
+            INSERT INTO raids (
                 title,
                 difficulty,
                 player_count,
@@ -337,32 +415,76 @@ def create_raid_definition(
         connection.commit()
 
 
+def upsert_week_member_availability(
+    week_id: int,
+    member_id: int,
+    day: str,
+    status: str,
+    available_after: str | None,
+    notes: str | None,
+):
+    timestamp = current_timestamp()
+    with get_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO week_member_availability (
+                week_id,
+                member_id,
+                day,
+                status,
+                available_after,
+                notes,
+                created_at,
+                updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(week_id, member_id, day)
+            DO UPDATE SET
+                status = excluded.status,
+                available_after = excluded.available_after,
+                notes = excluded.notes,
+                updated_at = excluded.updated_at
+            """,
+            (
+                week_id,
+                member_id,
+                day,
+                status,
+                available_after,
+                notes,
+                timestamp,
+                timestamp,
+            ),
+        )
+        connection.commit()
+
+
 # Count/query helpers
-def count_scheduled_raids_for_definition(raid_definition_id: int) -> int:
+def count_raid_groups_for_raid(raid_id: int) -> int:
     with get_connection() as connection:
         row = connection.execute(
-            "SELECT COUNT(*) FROM scheduled_raids WHERE raid_definition_id = ?",
-            (raid_definition_id,),
+            "SELECT COUNT(*) FROM raid_groups WHERE raid_id = ?",
+            (raid_id,),
         ).fetchone()
 
         return row[0]
 
 
-def count_scheduled_raids_for_week(week_id: int) -> int:
+def count_raid_groups_for_week(week_id: int) -> int:
     with get_connection() as connection:
         row = connection.execute(
-            "SELECT COUNT(*) FROM scheduled_raids WHERE week_id = ?",
+            "SELECT COUNT(*) FROM raid_groups WHERE week_id = ?",
             (week_id,),
         ).fetchone()
 
         return row[0]
 
 
-def count_assignments_for_scheduled_raid(scheduled_raid_id: int) -> int:
+def count_assignments_for_raid_group(raid_group_id: int) -> int:
     with get_connection() as connection:
         row = connection.execute(
-            "SELECT COUNT(*) FROM scheduled_raid_assignments WHERE scheduled_raid_id = ?",
-            (scheduled_raid_id,),
+            "SELECT COUNT(*) FROM raid_assignments WHERE raid_group_id = ?",
+            (raid_group_id,),
         ).fetchone()
 
         return row[0]
@@ -373,7 +495,7 @@ def count_assignments_for_member(member_id: int) -> int:
         row = connection.execute(
             """
             SELECT COUNT(*)
-            FROM scheduled_raid_assignments
+            FROM raid_assignments
             WHERE character_id IN (
                 SELECT id
                 FROM characters
@@ -391,7 +513,7 @@ def count_assignments_for_character(character_id: int) -> int:
         row = connection.execute(
             """
             SELECT COUNT(*)
-            FROM scheduled_raid_assignments
+            FROM raid_assignments
             WHERE character_id = ?
             """,
             (character_id,),
@@ -401,51 +523,51 @@ def count_assignments_for_character(character_id: int) -> int:
 
 
 # Delete operations (cascading behavior)
-def delete_raid_definition(raid_definition_id: int):
+def delete_raid(raid_id: int):
     with get_connection() as connection:
         connection.execute(
             """
-            DELETE FROM scheduled_raid_assignments
-            WHERE scheduled_raid_id IN (
+            DELETE FROM raid_assignments
+            WHERE raid_group_id IN (
                 SELECT id
-                FROM scheduled_raids
-                WHERE raid_definition_id = ?
+                FROM raid_groups
+                WHERE raid_id = ?
             )
             """,
-            (raid_definition_id,),
+            (raid_id,),
         )
         connection.execute(
             """
-            DELETE FROM scheduled_raids
-            WHERE raid_definition_id = ?
+            DELETE FROM raid_groups
+            WHERE raid_id = ?
             """,
-            (raid_definition_id,),
+            (raid_id,),
         )
         connection.execute(
             """
-            DELETE FROM raid_definitions
+            DELETE FROM raids
             WHERE id = ?
             """,
-            (raid_definition_id,),
+            (raid_id,),
         )
         connection.commit()
 
 
-def delete_scheduled_raid(scheduled_raid_id: int):
+def delete_raid_group(raid_group_id: int):
     with get_connection() as connection:
         connection.execute(
             """
-            DELETE FROM scheduled_raid_assignments
-            WHERE scheduled_raid_id = ?
+            DELETE FROM raid_assignments
+            WHERE raid_group_id = ?
             """,
-            (scheduled_raid_id,),
+            (raid_group_id,),
         )
         connection.execute(
             """
-            DELETE FROM scheduled_raids
+            DELETE FROM raid_groups
             WHERE id = ?
             """,
-            (scheduled_raid_id,),
+            (raid_group_id,),
         )
         connection.commit()
 
@@ -455,7 +577,7 @@ def delete_assignment(assignment_id: int):
     with get_connection() as connection:
         connection.execute(
             """
-            DELETE FROM scheduled_raid_assignments
+            DELETE FROM raid_assignments
             WHERE id = ?
             """,
             (assignment_id,),
@@ -467,10 +589,17 @@ def delete_week(week_id: int):
     with get_connection() as connection:
         connection.execute(
             """
-            DELETE FROM scheduled_raid_assignments
-            WHERE scheduled_raid_id IN (
+            DELETE FROM week_member_availability
+            WHERE week_id = ?
+            """,
+            (week_id,),
+        )
+        connection.execute(
+            """
+            DELETE FROM raid_assignments
+            WHERE raid_group_id IN (
                 SELECT id
-                FROM scheduled_raids
+                FROM raid_groups
                 WHERE week_id = ?
             )
             """,
@@ -478,7 +607,7 @@ def delete_week(week_id: int):
         )
         connection.execute(
             """
-            DELETE FROM scheduled_raids
+            DELETE FROM raid_groups
             WHERE week_id = ?
             """,
             (week_id,),
@@ -497,7 +626,14 @@ def delete_member(member_id: int):
     with get_connection() as connection:
         connection.execute(
             """
-            DELETE FROM scheduled_raid_assignments
+            DELETE FROM week_member_availability
+            WHERE member_id = ?
+            """,
+            (member_id,),
+        )
+        connection.execute(
+            """
+            DELETE FROM raid_assignments
             WHERE character_id IN (
                 SELECT id
                 FROM characters
@@ -527,7 +663,7 @@ def delete_character(member_id: int, character_id: int):
     with get_connection() as connection:
         connection.execute(
             """
-            DELETE FROM scheduled_raid_assignments
+            DELETE FROM raid_assignments
             WHERE character_id =?            
             """,
             (character_id,),

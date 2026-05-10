@@ -4,7 +4,7 @@ from app.services.weeks_service import (
     create_week_record,
     delete_week_record,
     force_delete_week_record,
-    get_week_scheduled_raid_count,
+    get_week_raid_group_count,
     get_weeks_page_data,
 )
 from ui.components.layout import app_shell
@@ -29,7 +29,9 @@ def render_weeks(pending_delete_week_id, delete_week_dialog):
                 ui.html(
                     f'<div class="app-muted">{week.get("notes") or "No notes"}</div>'
                 )
-                ui.link("Open week", f"/weeks/{week['id']}").classes("app-link-button")
+                ui.link("Open week", f"/weeks/{week['id']}/plan").classes(
+                    "app-link-button"
+                )
                 with ui.row():
                     ui.button(
                         "Delete",
@@ -48,9 +50,9 @@ def create_week(start_date, notes):
 
 
 def delete_week_item(week_id: int, pending_delete_week_id, delete_week_dialog):
-    scheduled_raid_count = get_week_scheduled_raid_count(week_id)
+    raid_group_count = get_week_raid_group_count(week_id)
 
-    if scheduled_raid_count == 0:
+    if raid_group_count == 0:
         delete_week_record(week_id)
         render_weeks.refresh()
         ui.notify("Week deleted.", color="positive")
@@ -79,8 +81,8 @@ def weeks_page():
     pending_delete_week_id = {"value": None}
 
     with ui.dialog() as delete_week_dialog, ui.card():
-        ui.label("This week already has scheduled raids.")
-        ui.label("Deleting it will also remove those scheduled raids. Are you sure?")
+        ui.label("This week already has raid groups.")
+        ui.label("Deleting it will also remove those raid groups. Are you sure?")
 
         with ui.row():
             ui.button("Cancel", on_click=delete_week_dialog.close)
